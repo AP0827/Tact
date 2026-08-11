@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from tact.agent.config import Config, PairedDevice
+from tact.agent.config import Config, PairedDevice, PendingPairing
 from tact.agent.events import Event, EventBus
 from tact.agent.integrations.system import SystemIntegration
 from tact.agent.actions import ActionRegistry
@@ -20,13 +20,19 @@ class ConfigTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_generate_and_consume_pairing_token(self):
+    def test_generate_6_digit_otp(self):
+        config = Config(self.path)
+        token = config.generate_pairing_token()
+        self.assertTrue(token.isdigit())
+        self.assertEqual(len(token), 6)
+
+    def test_consume_valid_otp(self):
         config = Config(self.path)
         token = config.generate_pairing_token()
         self.assertTrue(config.consume_pairing_token(token))
         self.assertFalse(config.consume_pairing_token(token))
 
-    def test_expired_pairing_token_rejected(self):
+    def test_expired_otp_rejected(self):
         config = Config(self.path)
         token = config.generate_pairing_token(ttl_seconds=-1)
         self.assertFalse(config.consume_pairing_token(token))
@@ -57,6 +63,30 @@ class ConfigTests(unittest.TestCase):
         config2 = Config(self.path)
         self.assertEqual(len(config2.list_devices()), 1)
         self.assertEqual(config2.list_devices()[0].label, "Phone")
+
+    def test_create_and_approve_pending_pairing(self):
+        config = Config(self.path)
+        otp = config.generate_pairing_token()
+        config.consume_pairing_token(otp)
+        pending = config.create_pending_pairing(otp, "dev-1", "Phone")
+        self.assertEqual(pending.device_id, "dev-1")
+        self.assertEqual(len(config._data.get("pending_pairings", [])), 1)
+        device = config.approve_pending_pairing(pending.pending_id)
+        self.assertIsNotNone(device)
+        self.assertEqual(device.device_id, "dev-1")
+        self.assertEqual(len(config._data.get("pending_pairings", [])), 0)
+        self.assertTrue(config.is_paired("dev-1"))
+
+    def test_reject_pending_pairing(self):
+        config = Config(self.path)
+        otp = config.generate_pairing_token()
+        config.consume_pairing_token(otp)
+        pending = config.create_pending_pairing(otp, "dev-1", "Phone")
+        pendings = config._data.get("pending_pairings", [])
+        new_pendings = [p for p in pendings if p.get("pending_id") != pending.pending_id]
+        config._data["pending_pairings"] = new_pendings
+        config._save()
+        self.assertIsNone(config.get_pending_pairing(pending.pending_id))
 
 
 class EventBusTests(unittest.TestCase):
@@ -135,7 +165,11 @@ class ActionRegistrySystemTests(unittest.TestCase):
             "system.open_project",
             "vscode.open_workspace",
             "vscode.status",
+            "vscode.workspaces",
             "git.status",
+            "git.branches",
+            "git.tree",
+            "git._switch_branch",
             "git.pull",
             "git.push",
             "git.commit",

@@ -1,6 +1,6 @@
 import json
 import secrets
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -18,6 +18,16 @@ class PairedDevice:
     last_seen: Optional[str] = None
 
 
+@dataclass
+class PendingPairing:
+    pending_id: str
+    device_id: str
+    label: str
+    created_at: str
+    otp: str
+    otp_expires: float
+
+
 class Config:
     """Local-first configuration and pairing persistence."""
 
@@ -27,12 +37,22 @@ class Config:
 
     def _load(self) -> dict:
         if not self.config_path.exists():
-            return {"paired_devices": [], "pairing_token": None, "pairing_token_expires": None}
+            return {
+                "paired_devices": [],
+                "pending_pairings": [],
+                "pairing_token": None,
+                "pairing_token_expires": None,
+            }
         try:
             text = self.config_path.read_text(encoding="utf-8")
             return json.loads(text)
         except Exception:
-            return {"paired_devices": [], "pairing_token": None, "pairing_token_expires": None}
+            return {
+                "paired_devices": [],
+                "pending_pairings": [],
+                "pairing_token": None,
+                "pairing_token_expires": None,
+            }
 
     def _save(self) -> None:
         try:
@@ -42,7 +62,7 @@ class Config:
             pass
 
     def generate_pairing_token(self, ttl_seconds: int = 300) -> str:
-        token = secrets.token_urlsafe(16)
+        token = f"{secrets.randbelow(1000000):06d}"
         self._data["pairing_token"] = token
         self._data["pairing_token_expires"] = (
             datetime.now(timezone.utc).timestamp() + ttl_seconds
@@ -64,6 +84,49 @@ class Config:
         self._data["pairing_token_expires"] = None
         self._save()
         return True
+
+    def create_pending_pairing(
+        self, otp: str, device_id: str, label: str, ttl_seconds: int = 300
+    ) -> PendingPairing:
+        pending = PendingPairing(
+            pending_id=secrets.token_urlsafe(8),
+            device_id=device_id,
+            label=label,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            otp=otp,
+            otp_expires=datetime.now(timezone.utc).timestamp() + ttl_seconds,
+        )
+        pendings = self._data.get("pending_pairings", [])
+        pendings = [p for p in pendings if p.get("pending_id") != pending.pending_id]
+        pendings.append(asdict(pending))
+        self._data["pending_pairings"] = pendings
+        self._save()
+        return pending
+
+    def get_pending_pairing(self, pending_id: str) -> Optional[PendingPairing]:
+        for p in self._data.get("pending_pairings", []):
+            if p.get("pending_id") == pending_id:
+                return PendingPairing(**p)
+        return None
+
+    def approve_pending_pairing(self, pending_id: str) -> Optional[PairedDevice]:
+        pending = self.get_pending_pairing(pending_id)
+        if pending is None:
+            return None
+        if datetime.now(timezone.utc).timestamp() > pending.otp_expires:
+            self._data["pending_pairings"] = [
+                p for p in self._data.get("pending_pairings", [])
+                if p.get("pending_id") != pending_id
+            ]
+            self._save()
+            return None
+        device = self.pair_device(pending.device_id, pending.label)
+        self._data["pending_pairings"] = [
+            p for p in self._data.get("pending_pairings", [])
+            if p.get("pending_id") != pending_id
+        ]
+        self._save()
+        return device
 
     def pair_device(self, device_id: str, label: str) -> PairedDevice:
         device = PairedDevice(

@@ -5,28 +5,41 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Tact Developer Control Surface</title>
     <style>
+      :root {
+        --primary-50: #fef7ee;
+        --primary-100: #fdecd3;
+        --primary-200: #fad6a5;
+        --primary-300: #f7b96d;
+        --primary-400: #f39232;
+        --primary-500: #f07316;
+        --primary-600: #e1560b;
+        --primary-700: #bb3d0b;
+        --primary-800: #953110;
+        --primary-900: #792a10;
+      }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { 
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        background: #f5f5f5;
-        color: #333;
+        background: #ffffff;
+        color: #1a1a1a;
         display: flex;
         flex-direction: column;
         height: 100vh;
       }
 
       nav {
-        background: #2d2d2d;
-        color: #fff;
+        background: #ffffff;
+        color: #1a1a1a;
         padding: 12px 16px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        border-bottom: 1px solid var(--primary-100);
       }
 
-      nav h1 { font-size: 18px; font-weight: 600; }
-      nav .status { font-size: 12px; opacity: 0.8; }
+      nav h1 { font-size: 18px; font-weight: 700; color: var(--primary-700); }
+      nav .status { font-size: 12px; opacity: 0.8; display: flex; align-items: center; gap: 8px; }
 
       .container { 
         display: flex;
@@ -39,34 +52,34 @@
         display: flex;
         gap: 8px;
         padding: 8px 12px;
-        background: #fff;
-        border-bottom: 1px solid #e0e0e0;
+        background: #ffffff;
+        border-bottom: 1px solid var(--primary-100);
         overflow-x: auto;
       }
 
       .tab-btn {
         padding: 8px 16px;
         border: none;
-        background: #f0f0f0;
+        background: var(--primary-50);
+        color: var(--primary-700);
         cursor: pointer;
-        border-radius: 4px;
-        font-size: 14px;
-        font-weight: 500;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
         transition: all 0.2s;
         white-space: nowrap;
+        border: 1px solid transparent;
       }
 
       .tab-btn.active {
-        background: #2d2d2d;
+        background: var(--primary-500);
         color: #fff;
+        border-color: var(--primary-600);
       }
 
-      .tab-btn:hover {
-        background: #e0e0e0;
-      }
-
-      .tab-btn.active:hover {
-        background: #1a1a1a;
+      .tab-btn:hover:not(.active) {
+        background: var(--primary-100);
+        border-color: var(--primary-200);
       }
 
       .content {
@@ -87,109 +100,130 @@
       }
 
       .card {
-        background: #fff;
-        border-radius: 8px;
+        background: #ffffff;
+        border-radius: 10px;
         padding: 16px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        border: 1px solid var(--primary-100);
       }
 
       .card h2 {
-        font-size: 16px;
-        font-weight: 600;
+        font-size: 15px;
+        font-weight: 700;
         margin-bottom: 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        color: var(--primary-900);
       }
 
       .metric-group {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        margin-bottom: 12px;
+        gap: 10px;
+        margin-bottom: 10px;
       }
 
       .metric {
-        background: #f9f9f9;
+        background: var(--primary-50);
         padding: 12px;
-        border-radius: 4px;
+        border-radius: 6px;
+        border: 1px solid var(--primary-100);
       }
 
       .metric-label {
-        font-size: 12px;
-        color: #666;
+        font-size: 11px;
+        color: var(--primary-700);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.6px;
+        font-weight: 600;
       }
 
       .metric-value {
         font-size: 18px;
-        font-weight: 600;
+        font-weight: 700;
         margin-top: 4px;
+        color: var(--primary-900);
       }
 
       .buttons {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
-        margin-top: 12px;
+        margin-top: 10px;
       }
 
-      button {
+      button, .btn {
         flex: 1;
-        min-width: 120px;
-        padding: 12px 16px;
+        min-width: 100px;
+        padding: 10px 14px;
         border: none;
-        background: #2d2d2d;
+        background: var(--primary-500);
         color: #fff;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
+        font-size: 13px;
+        font-weight: 600;
         transition: all 0.2s;
+        text-align: center;
       }
 
-      button:hover {
-        background: #1a1a1a;
+      button:hover, .btn:hover {
+        background: var(--primary-600);
       }
 
-      button:disabled {
+      button:disabled, .btn:disabled {
         background: #ccc;
         cursor: not-allowed;
       }
 
+      .btn-secondary {
+        background: #fff;
+        color: var(--primary-700);
+        border: 1px solid var(--primary-200);
+      }
+
+      .btn-secondary:hover {
+        background: var(--primary-50);
+      }
+
       .event-log {
-        background: #f9f9f9;
+        background: var(--primary-50);
         padding: 12px;
-        border-radius: 4px;
+        border-radius: 6px;
         font-family: 'Courier New', monospace;
         font-size: 12px;
-        max-height: 200px;
+        max-height: 220px;
         overflow-y: auto;
         white-space: pre-wrap;
         word-break: break-word;
+        border: 1px solid var(--primary-100);
+        color: var(--primary-900);
       }
 
       .status-badge {
         display: inline-block;
-        padding: 4px 8px;
-        border-radius: 2px;
+        padding: 3px 8px;
+        border-radius: 4px;
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 700;
         text-transform: uppercase;
+        letter-spacing: 0.4px;
       }
 
-      .status-badge.ok { background: #d4edda; color: #155724; }
-      .status-badge.error { background: #f8d7da; color: #721c24; }
-      .status-badge.info { background: #d1ecf1; color: #0c5460; }
+      .status-badge.ok { background: #dcfce7; color: #166534; }
+      .status-badge.error { background: #fee2e2; color: #991b1b; }
+      .status-badge.info { background: var(--primary-100); color: var(--primary-800); }
 
       .last-result {
         padding: 12px;
-        background: #f0f0f0;
-        border-radius: 4px;
+        background: var(--primary-50);
+        border-radius: 6px;
         font-size: 12px;
-        margin-top: 12px;
+        margin-top: 10px;
         font-family: monospace;
+        border: 1px solid var(--primary-100);
+        color: var(--primary-900);
       }
 
       .connection-status {
@@ -202,7 +236,7 @@
       }
 
       .connection-status.connected {
-        background: #28a745;
+        background: var(--primary-500);
         animation: pulse 2s infinite;
       }
 
@@ -214,8 +248,8 @@
       .pairing-overlay {
         position: fixed;
         inset: 0;
-        background: #2d2d2d;
-        color: #fff;
+        background: #ffffff;
+        color: var(--primary-900);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -223,15 +257,25 @@
         padding: 24px;
         z-index: 1000;
         gap: 16px;
+        border-top: 4px solid var(--primary-500);
       }
 
       .pairing-overlay input {
         padding: 12px;
-        border-radius: 4px;
-        border: none;
+        border-radius: 6px;
+        border: 2px solid var(--primary-200);
         font-size: 16px;
         width: 100%;
         max-width: 320px;
+        text-align: center;
+        letter-spacing: 4px;
+        color: var(--primary-900);
+      }
+
+      .pairing-overlay input:focus {
+        outline: none;
+        border-color: var(--primary-500);
+        box-shadow: 0 0 0 3px var(--primary-100);
       }
 
       .pairing-overlay button {
@@ -242,15 +286,167 @@
       .hidden {
         display: none !important;
       }
+
+      .tree-node {
+        padding-left: 16px;
+        position: relative;
+      }
+
+      .tree-item {
+        padding: 3px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: var(--primary-900);
+        cursor: default;
+      }
+
+      .tree-item::before {
+        content: '';
+        position: absolute;
+        left: 6px;
+        top: 10px;
+        width: 6px;
+        height: 1px;
+        background: var(--primary-300);
+      }
+
+      .tree-dir {
+        color: var(--primary-700);
+        font-weight: 700;
+      }
+
+      .tree-file {
+        color: #4b5563;
+      }
+
+      .select-wrapper {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      select {
+        padding: 8px 28px 8px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--primary-200);
+        background: #fff;
+        color: var(--primary-900);
+        font-size: 13px;
+        font-weight: 600;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e1560b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        cursor: pointer;
+      }
+
+      select:focus {
+        outline: none;
+        border-color: var(--primary-500);
+        box-shadow: 0 0 0 3px var(--primary-100);
+      }
+
+      .commit-form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .commit-form input, .commit-form textarea {
+        width: 100%;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid var(--primary-200);
+        background: #fff;
+        color: var(--primary-900);
+        font-size: 13px;
+        font-family: inherit;
+      }
+
+      .commit-form input:focus, .commit-form textarea:focus {
+        outline: none;
+        border-color: var(--primary-500);
+        box-shadow: 0 0 0 3px var(--primary-100);
+      }
+
+      .commit-form textarea {
+        resize: vertical;
+        min-height: 60px;
+      }
+
+      .inline-form {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .workspace-dropdown {
+        position: relative;
+        display: inline-flex;
+      }
+
+      .workspace-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 4px;
+        background: #fff;
+        border: 1px solid var(--primary-200);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        z-index: 50;
+        min-width: 260px;
+        max-height: 240px;
+        overflow-y: auto;
+      }
+
+      .workspace-menu-item {
+        padding: 10px 12px;
+        font-size: 12px;
+        color: var(--primary-900);
+        cursor: pointer;
+        border-bottom: 1px solid var(--primary-50);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .workspace-menu-item:hover {
+        background: var(--primary-50);
+      }
+
+      .workspace-menu-item:last-child {
+        border-bottom: none;
+      }
+
+      .workspace-menu-empty {
+        padding: 12px;
+        font-size: 12px;
+        color: #6b7280;
+        text-align: center;
+      }
+
+      .section-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--primary-700);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
     </style>
   </head>
   <body>
-    <div id="pairingOverlay" class="pairing-overlay hidden">
-      <h2>Pair with Tact Desktop Agent</h2>
-      <p id="pairingStep1">Enter the pairing code shown on your desktop.</p>
-      <input id="pairingToken" placeholder="Pairing token" autocomplete="off" />
-      <button onclick="window.pairWithAgent()">Pair</button>
-      <p id="pairingError" style="color:#f8d7da;font-size:12px;"></p>
+    <div id="pairingOverlay" class="pairing-overlay">
+      <h2 style="font-size: 20px; font-weight: 700;">Pair with Tact Desktop Agent</h2>
+      <p style="font-size: 13px; opacity: 0.8; text-align: center; max-width: 280px;">Enter the 6-digit OTP shown on your desktop terminal.</p>
+      <input id="pairingToken" placeholder="000000" maxlength="6" autocomplete="off" />
+      <button onclick="window.requestPairing()">Request Pairing</button>
+      <p id="pairingError" style="color: var(--primary-700); font-size: 12px; font-weight: 600;"></p>
+      <p id="pairingPending" style="color: var(--primary-700); font-size: 12px; display: none;">Waiting for approval on your laptop... Visit the admin page shown in the terminal to approve.</p>
     </div>
 
     <nav>
@@ -323,10 +519,17 @@
                 <div class="metric-label">Status</div>
                 <div class="metric-value" style="font-size: 12px;" id="vscodeStatus">-</div>
               </div>
+              <div class="metric">
+                <div class="metric-label">Open Workspaces</div>
+                <div class="metric-value" style="font-size: 12px;" id="vscodeWorkspaceCount">-</div>
+              </div>
             </div>
-            <div class="buttons">
-              <button onclick="window.sendAction('vscode.status')">Refresh</button>
-              <button onclick="window.sendAction('vscode.open_workspace')">Open Workspace</button>
+            <div class="buttons" style="align-items: center; gap: 10px;">
+              <div class="workspace-dropdown">
+                <button class="btn" id="openWorkspaceBtn" onclick="window.openWorkspaceMenu()">Open Workspace ▾</button>
+                <div id="workspaceMenu" class="workspace-menu" style="display: none;"></div>
+              </div>
+              <button class="btn btn-secondary" onclick="window.sendAction('vscode.status')">Refresh</button>
             </div>
             <div id="vscodeResult" class="last-result" style="display:none;"></div>
           </div>
@@ -348,13 +551,33 @@
                 <div class="metric-value" style="font-size: 12px;" id="gitClean">-</div>
               </div>
             </div>
+
+            <div class="section-title">Branch</div>
+            <div class="inline-form">
+              <select id="gitBranchSelect">
+                <option value="">Loading...</option>
+              </select>
+              <button class="btn" style="flex: 0 0 auto;" onclick="window.switchBranch()">Switch</button>
+            </div>
+
+            <div class="section-title" style="margin-top: 12px;">Actions</div>
             <div class="buttons">
               <button onclick="window.sendAction('git.status')">Refresh</button>
               <button onclick="window.sendAction('git.pull')">Pull</button>
               <button onclick="window.sendAction('git.push')">Push</button>
-              <button onclick="window.gitCommit()">Commit</button>
             </div>
+
+            <div class="commit-form">
+              <textarea id="commitMessage" placeholder="Commit message..."></textarea>
+              <button class="btn" onclick="window.commitChanges()">Commit</button>
+            </div>
+
             <div id="gitResult" class="last-result" style="display:none;"></div>
+          </div>
+
+          <div class="card">
+            <h2>Repository Tree</h2>
+            <div id="gitTree" class="event-log" style="max-height: 300px;">Loading tree...</div>
           </div>
         </div>
 
@@ -368,226 +591,413 @@
     </div>
 
     <script>
-      const connStatus = document.getElementById('connStatus')
-      const statusText = document.getElementById('statusText')
-      const cpuEl = document.getElementById('cpu')
-      const memEl = document.getElementById('memory')
-      const diskEl = document.getElementById('disk')
-      const workspaceEl = document.getElementById('workspace')
-      const gitBranchEl = document.getElementById('gitBranch')
-      const gitCleanEl = document.getElementById('gitClean')
-      const gitStateEl = document.getElementById('gitState')
-      const vscodeStatusEl = document.getElementById('vscodeStatus')
-      const vscodeStateEl = document.getElementById('vscodeState')
-      const eventLogEl = document.getElementById('eventLog')
-      const vscodeResultEl = document.getElementById('vscodeResult')
-      const gitResultEl = document.getElementById('gitResult')
-      const systemResultEl = document.getElementById('systemResult')
-      const pairingOverlay = document.getElementById('pairingOverlay')
-      const pairingTokenInput = document.getElementById('pairingToken')
-      const pairingError = document.getElementById('pairingError')
+      document.addEventListener('DOMContentLoaded', () => {
+        const connStatus = document.getElementById('connStatus')
+        const statusText = document.getElementById('statusText')
+        const cpuEl = document.getElementById('cpu')
+        const memEl = document.getElementById('memory')
+        const diskEl = document.getElementById('disk')
+        const workspaceEl = document.getElementById('workspace')
+        const gitBranchEl = document.getElementById('gitBranch')
+        const gitCleanEl = document.getElementById('gitClean')
+        const gitStateEl = document.getElementById('gitState')
+        const gitBranchSelect = document.getElementById('gitBranchSelect')
+        const gitTreeEl = document.getElementById('gitTree')
+        const vscodeStatusEl = document.getElementById('vscodeStatus')
+        const vscodeStateEl = document.getElementById('vscodeState')
+        const vscodeWorkspaceCountEl = document.getElementById('vscodeWorkspaceCount')
+        const eventLogEl = document.getElementById('eventLog')
+        const vscodeResultEl = document.getElementById('vscodeResult')
+        const gitResultEl = document.getElementById('gitResult')
+        const systemResultEl = document.getElementById('systemResult')
+        const workspaceMenu = document.getElementById('workspaceMenu')
+        const pairingOverlay = document.getElementById('pairingOverlay')
+        const pairingTokenInput = document.getElementById('pairingToken')
+        const pairingError = document.getElementById('pairingError')
+        const pairingPending = document.getElementById('pairingPending')
 
-      let currentWorkspace = null
-      let logs = []
-      let ws = null
-      let reconnectAttempts = 0
-      let currentToken = localStorage.getItem('tact_pair_token') || ''
-      let currentDeviceId = localStorage.getItem('tact_device_id') || ''
-
-      function showPairing(show) {
-        if (show) {
-          pairingOverlay.classList.remove('hidden')
-        } else {
-          pairingOverlay.classList.add('hidden')
-        }
-      }
-
-      async function pairWithAgent() {
-        const token = pairingTokenInput.value.trim()
-        if (!token) return
-        pairingError.textContent = ''
+        let currentWorkspace = null
+        let logs = []
+        let ws = null
+        let reconnectAttempts = 0
+        let currentDeviceId = localStorage.getItem('tact_device_id') || ''
+        let currentToken = localStorage.getItem('tact_pair_token') || ''
+        let pairingTimer = null
+        let recentWorkspaces = []
         try {
-          const res = await fetch('/api/pair/confirm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, device_id: token, label: 'phone-' + Math.floor(Math.random() * 10000) }),
-          })
-          if (!res.ok) {
-            const err = await res.json()
-            pairingError.textContent = err.detail || 'Pairing failed'
+          recentWorkspaces = JSON.parse(localStorage.getItem('tact_recent_workspaces') || '[]')
+        } catch (e) {
+          recentWorkspaces = []
+        }
+
+        function showPairing(show) {
+          console.log('showPairing', show)
+          if (show) {
+            pairingOverlay.classList.remove('hidden')
+            statusText.textContent = 'Not paired'
+          } else {
+            pairingOverlay.classList.add('hidden')
+          }
+        }
+
+        function addRecentWorkspace(path) {
+          if (!path) return
+          recentWorkspaces = recentWorkspaces.filter(w => w !== path)
+          recentWorkspaces.unshift(path)
+          if (recentWorkspaces.length > 10) recentWorkspaces.pop()
+          try {
+            localStorage.setItem('tact_recent_workspaces', JSON.stringify(recentWorkspaces))
+          } catch (e) {}
+        }
+
+        function renderWorkspaceMenu(workspaces) {
+          workspaceMenu.innerHTML = ''
+          const items = workspaces.length > 0 ? workspaces : recentWorkspaces
+          if (items.length === 0) {
+            workspaceMenu.innerHTML = '<div class="workspace-menu-empty">No recent workspaces</div>'
             return
           }
-          currentToken = token
-          currentDeviceId = token
-          localStorage.setItem('tact_pair_token', currentToken)
-          localStorage.setItem('tact_device_id', currentDeviceId)
-          showPairing(false)
-          connect()
-        } catch (e) {
-          pairingError.textContent = 'Network error'
+          items.forEach(ws => {
+            const div = document.createElement('div')
+            div.className = 'workspace-menu-item'
+            div.textContent = ws
+            div.onclick = () => {
+              addRecentWorkspace(ws)
+              window.sendAction('vscode.open_workspace', { path: ws })
+              workspaceMenu.style.display = 'none'
+            }
+            workspaceMenu.appendChild(div)
+          })
         }
-      }
 
-      window.pairWithAgent = pairWithAgent
-
-      async function checkPairingStatus() {
-        try {
-          const res = await fetch('/api/pair/status')
-          const data = await res.json()
-          if (data.paired && currentDeviceId && data.devices.some(d => d.device_id === currentDeviceId)) {
-            showPairing(false)
-            return true
+        window.openWorkspaceMenu = function() {
+          const visible = workspaceMenu.style.display !== 'none'
+          if (visible) {
+            workspaceMenu.style.display = 'none'
+            return
           }
-          if (data.pairing_token) {
-            showPairing(true)
-            pairingTokenInput.value = data.pairing_token
-            return false
+          const workspaces = (window._lastVscodeWorkspaces && window._lastVscodeWorkspaces.workspaces) || []
+          renderWorkspaceMenu(workspaces)
+          workspaceMenu.style.display = 'block'
+        }
+
+        function hideWorkspaceMenu() {
+          workspaceMenu.style.display = 'none'
+        }
+
+        document.addEventListener('click', (e) => {
+          if (!e.target.closest('.workspace-dropdown')) {
+            hideWorkspaceMenu()
           }
-          showPairing(true)
-          return false
-        } catch (e) {
-          return false
-        }
-      }
-
-      function connect() {
-        if (ws) {
-          try { ws.close() } catch (e) { /* ignore */ }
-        }
-        const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
-        const wsUrl = `${scheme}://${location.host}/ws`
-        ws = new WebSocket(wsUrl)
-
-        ws.addEventListener('open', () => {
-          connStatus.classList.add('connected')
-          statusText.textContent = 'Connected'
-          reconnectAttempts = 0
-          ws.send(JSON.stringify({ type: 'auth', token: currentToken, label: 'phone' }))
         })
 
-        ws.addEventListener('message', (ev) => {
+        async function requestPairing() {
+          const token = pairingTokenInput.value.trim()
+          console.log('requestPairing', { token })
+          if (!token || token.length !== 6) {
+            pairingError.textContent = 'Enter the 6-digit OTP from the desktop terminal'
+            return
+          }
+          pairingError.textContent = ''
           try {
-            const msg = JSON.parse(ev.data)
-            if (msg.type === 'error') {
-              logEvent(`Error: ${msg.message}`)
-              if (msg.message === 'unauthorized' || msg.message === 'auth_required') {
-                showPairing(true)
-              }
+            const res = await fetch('/api/pair/request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token, device_id: 'phone-' + Date.now(), label: 'Phone' }),
+            })
+            const data = await res.json()
+            console.log('pair request response', data)
+            if (!res.ok || !data.ok) {
+              pairingError.textContent = (data && data.detail) || 'Pairing request failed'
               return
             }
-            if ((msg.type === 'init' || msg.type === 'telemetry') && msg.payload) {
-              const system = msg.payload.system || msg.payload
-              cpuEl.textContent = Math.round(system.cpu ?? 0)
-              memEl.textContent = Math.round(system.memory ?? 0)
-              diskEl.textContent = system.disk !== null && system.disk !== undefined ? Math.round(system.disk) : '-'
+            currentToken = token
+            currentDeviceId = data.device_id
+            try {
+              localStorage.setItem('tact_pair_token', currentToken)
+              localStorage.setItem('tact_device_id', currentDeviceId)
+            } catch (e) {}
+            pairingPending.style.display = 'block'
+            pairingTokenInput.disabled = true
+            pollPairingStatus()
+          } catch (e) {
+            console.error('pair request failed', e)
+            pairingError.textContent = 'Network error'
+          }
+        }
 
-              const workspace = msg.payload.workspace || {}
-              currentWorkspace = workspace.git_root || workspace.cwd || currentWorkspace
-              workspaceEl.textContent = currentWorkspace ? currentWorkspace.split('/').pop() : '-'
+        window.requestPairing = requestPairing
 
-              const git = workspace.git || {}
-              if (git && git.available) {
-                gitBranchEl.textContent = git.branch || '(no branch)'
-                gitCleanEl.textContent = git.clean ? 'clean' : `dirty (${git.changed_files || 0})`
-                gitStateEl.textContent = git.clean ? 'CLEAN' : 'DIRTY'
-                gitStateEl.className = 'status-badge ' + (git.clean ? 'ok' : 'error')
+        async function pollPairingStatus() {
+          console.log('pollPairingStatus started')
+          if (pairingTimer) clearInterval(pairingTimer)
+          pairingTimer = setInterval(async () => {
+            try {
+              const res = await fetch('/api/pair/status')
+              const data = await res.json()
+              console.log('pair status poll', data)
+              const paired = data.devices && data.devices.some(d => d.device_id === currentDeviceId)
+              if (paired) {
+                console.log('device paired, connecting')
+                clearInterval(pairingTimer)
+                pairingTimer = null
+                showPairing(false)
+                connect()
               }
-
-              const vscode = workspace.vscode || {}
-              vscodeStatusEl.textContent = `${vscode.available ? 'available' : 'not available'}${vscode.running ? ' • running' : ''}`
-              vscodeStateEl.textContent = vscode.running ? 'RUNNING' : 'STOPPED'
-              vscodeStateEl.className = 'status-badge ' + (vscode.running ? 'ok' : 'info')
-            } else if (msg.type === 'event' && msg.payload) {
-              const evt = msg.payload
-              const severity = evt.severity || 'info'
-              const prefix = severity === 'error' ? 'ERROR' : severity === 'warning' ? 'WARN' : 'INFO'
-              logEvent(`[${prefix}] [${evt.source}] ${evt.title}: ${evt.message}`)
-            } else if (msg.type === 'action_result') {
-              const resultMsg = msg.result.ok ? `ok ${msg.action_id}` : `fail ${msg.action_id}: ${msg.result.error || 'unknown error'}`
-              logEvent(resultMsg)
-              
-              if (msg.action_id === 'vscode.status' || msg.action_id === 'vscode.open_workspace') {
-                vscodeResultEl.textContent = JSON.stringify(msg.result, null, 2)
-                vscodeResultEl.style.display = 'block'
-              } else if (msg.action_id.startsWith('git.')) {
-                gitResultEl.textContent = JSON.stringify(msg.result, null, 2)
-                gitResultEl.style.display = 'block'
-              } else if (msg.action_id.startsWith('system.')) {
-                systemResultEl.textContent = JSON.stringify(msg.result, null, 2)
-                systemResultEl.style.display = 'block'
-              }
+            } catch (e) {
+              console.error('pair status poll failed', e)
             }
-          } catch (e) { 
-            console.error(e) 
-          }
-        })
-
-        ws.addEventListener('close', () => {
-          connStatus.classList.remove('connected')
-          statusText.textContent = 'Disconnected'
-          scheduleReconnect()
-        })
-
-        ws.addEventListener('error', () => {
-          connStatus.classList.remove('connected')
-          statusText.textContent = 'Error'
-        })
-      }
-
-      function scheduleReconnect() {
-        if (reconnectAttempts >= 10) return
-        const delay = Math.min(1000 * 2 ** reconnectAttempts, 30000)
-        reconnectAttempts += 1
-        setTimeout(() => {
-          if (currentToken) {
-            connect()
-          }
-        }, delay)
-      }
-
-      function logEvent(line) {
-        const ts = new Date().toLocaleTimeString()
-        logs.unshift(`[${ts}] ${line}`)
-        if (logs.length > 100) logs.pop()
-        eventLogEl.textContent = logs.join('\n')
-      }
-
-      window.sendAction = function(actionId, payload = {}) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          logEvent(`socket not open: ${actionId}`)
-          return
+          }, 2000)
         }
-        logEvent(`-> ${actionId}`)
-        ws.send(JSON.stringify({ type: 'action', action_id: actionId, payload }))
-      }
 
-      window.gitCommit = function() {
-        const message = prompt('Commit message:')
-        if (!message) {
-          logEvent('commit cancelled')
-          return
+        function renderTree(nodes, container, depth = 0) {
+          container.innerHTML = ''
+          if (!nodes || nodes.length === 0) {
+            container.textContent = 'No files'
+            return
+          }
+          const ul = document.createElement('div')
+          ul.style.paddingLeft = (depth * 14) + 'px'
+          nodes.forEach(node => {
+            const div = document.createElement('div')
+            div.className = 'tree-item ' + (node.type === 'dir' ? 'tree-dir' : 'tree-file')
+            div.textContent = (node.type === 'dir' ? '📁 ' : '📄 ') + node.name
+            ul.appendChild(div)
+            if (node.children && node.children.length > 0) {
+              renderTree(node.children, ul, depth + 1)
+            }
+          })
+          container.appendChild(ul)
         }
-        window.sendAction('git.commit', { path: currentWorkspace, message })
-      }
 
-      // Tab switching
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
-          document.querySelectorAll('.tab-panel').forEach(b => b.classList.remove('active'))
-          btn.classList.add('active')
-          document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active')
+        function connect() {
+          console.log('connect() called', { currentDeviceId, wsUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws` })
+          if (ws) {
+            try { ws.close() } catch (e) { /* ignore */ }
+          }
+          const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
+          const wsUrl = `${scheme}://${location.host}/ws`
+          logEvent('Connecting to ' + wsUrl)
+          ws = new WebSocket(wsUrl)
+
+          let connectionTimeout = setTimeout(() => {
+            console.error('WebSocket connection timeout')
+            if (ws.readyState !== WebSocket.OPEN) {
+              showConnectionError('Connection timeout - check server and network')
+              try { ws.close() } catch (e) { /* ignore */ }
+            }
+          }, 8000)
+
+          ws.addEventListener('open', () => {
+            console.log('WebSocket open')
+            clearTimeout(connectionTimeout)
+            connStatus.classList.add('connected')
+            statusText.textContent = 'Connected'
+            reconnectAttempts = 0
+            ws.send(JSON.stringify({ type: 'auth', token: currentDeviceId, label: 'phone' }))
+          })
+
+          ws.addEventListener('message', (ev) => {
+            console.log('WebSocket message', ev.data)
+            try {
+              const msg = JSON.parse(ev.data)
+              if (msg.type === 'error') {
+                logEvent(`Error: ${msg.message}`)
+                if (msg.message === 'unauthorized' || msg.message === 'auth_required') {
+                  showPairing(true)
+                  statusText.textContent = 'Unauthorized'
+                } else {
+                  statusText.textContent = 'Error: ' + msg.message
+                }
+                return
+              }
+              if ((msg.type === 'init' || msg.type === 'telemetry') && msg.payload) {
+                const system = msg.payload.system || msg.payload
+                cpuEl.textContent = Math.round(system.cpu ?? 0)
+                memEl.textContent = Math.round(system.memory ?? 0)
+                diskEl.textContent = system.disk !== null && system.disk !== undefined ? Math.round(system.disk) : '-'
+
+                const workspace = msg.payload.workspace || {}
+                currentWorkspace = workspace.git_root || workspace.cwd || currentWorkspace
+                workspaceEl.textContent = currentWorkspace ? currentWorkspace.split('/').pop() : '-'
+
+                const git = workspace.git || {}
+                if (git && git.available) {
+                  gitBranchEl.textContent = git.branch || '(no branch)'
+                  gitCleanEl.textContent = git.clean ? 'clean' : `dirty (${git.changed_files || 0})`
+                  gitStateEl.textContent = git.clean ? 'CLEAN' : 'DIRTY'
+                  gitStateEl.className = 'status-badge ' + (git.clean ? 'ok' : 'error')
+                }
+
+                const gitBranches = workspace.git_branches || {}
+                if (gitBranches && gitBranches.available) {
+                  gitBranchSelect.innerHTML = ''
+                  (gitBranches.branches || []).forEach(b => {
+                    const opt = document.createElement('option')
+                    opt.value = b
+                    opt.textContent = b
+                    if (b === gitBranches.current) opt.selected = true
+                    gitBranchSelect.appendChild(opt)
+                  })
+                }
+
+                const gitTree = workspace.git_tree || {}
+                if (gitTree && gitTree.available) {
+                  renderTree(gitTree.tree || [], gitTreeEl)
+                } else {
+                  gitTreeEl.textContent = 'Not a git repository'
+                }
+
+                const vscode = workspace.vscode || {}
+                vscodeStatusEl.textContent = `${vscode.available ? 'available' : 'not available'}${vscode.running ? ' • running' : ''}`
+                vscodeStateEl.textContent = vscode.running ? 'RUNNING' : 'STOPPED'
+                vscodeStateEl.className = 'status-badge ' + (vscode.running ? 'ok' : 'info')
+
+                const vscodeWorkspaces = workspace.vscode_workspaces || {}
+                window._lastVscodeWorkspaces = vscodeWorkspaces
+                vscodeWorkspaceCountEl.textContent = vscodeWorkspaces.count !== undefined ? vscodeWorkspaces.count + ' open' : '-'
+                if (vscodeWorkspaces.workspaces && vscodeWorkspaces.workspaces.length > 0) {
+                  recentWorkspaces = vscodeWorkspaces.workspaces.filter((w) => !recentWorkspaces.includes(w)).concat(recentWorkspaces)
+                  try {
+                    localStorage.setItem('tact_recent_workspaces', JSON.stringify(recentWorkspaces.slice(0, 10)))
+                  } catch (e) {}
+                }
+              } else if (msg.type === 'event' && msg.payload) {
+                const evt = msg.payload
+                const severity = evt.severity || 'info'
+                const prefix = severity === 'error' ? 'ERROR' : severity === 'warning' ? 'WARN' : 'INFO'
+                logEvent(`[${prefix}] [${evt.source}] ${evt.title}: ${evt.message}`)
+              } else if (msg.type === 'action_result') {
+                const resultMsg = msg.result.ok ? `ok ${msg.action_id}` : `fail ${msg.action_id}: ${msg.result.error || 'unknown error'}`
+                logEvent(resultMsg)
+                
+                if (msg.action_id === 'vscode.status' || msg.action_id === 'vscode.workspaces') {
+                  vscodeResultEl.textContent = JSON.stringify(msg.result, null, 2)
+                  vscodeResultEl.style.display = 'block'
+                } else if (msg.action_id.startsWith('git.')) {
+                  gitResultEl.textContent = JSON.stringify(msg.result, null, 2)
+                  gitResultEl.style.display = 'block'
+                } else if (msg.action_id.startsWith('system.')) {
+                  systemResultEl.textContent = JSON.stringify(msg.result, null, 2)
+                  systemResultEl.style.display = 'block'
+                }
+              }
+            } catch (e) { 
+              console.error(e) 
+            }
+          })
+
+          ws.addEventListener('close', (ev) => {
+            console.log('WebSocket close', ev.code, ev.reason)
+            clearTimeout(connectionTimeout)
+            connStatus.classList.remove('connected')
+            statusText.textContent = 'Disconnected'
+            if (!currentDeviceId || ev.code === 4003 || ev.code === 4001) {
+              showPairing(true)
+            }
+            scheduleReconnect()
+          })
+
+          ws.addEventListener('error', (ev) => {
+            console.error('WebSocket error', ev)
+            clearTimeout(connectionTimeout)
+            connStatus.classList.remove('connected')
+            statusText.textContent = 'Error'
+            logEvent('WebSocket error')
+          })
+        }
+
+        function scheduleReconnect() {
+          if (reconnectAttempts >= 10) return
+          const delay = Math.min(1000 * 2 ** reconnectAttempts, 30000)
+          reconnectAttempts += 1
+          setTimeout(() => {
+            if (currentDeviceId) {
+              connect()
+            }
+          }, delay)
+        }
+
+        function logEvent(line) {
+          const ts = new Date().toLocaleTimeString()
+          logs.unshift(`[${ts}] ${line}`)
+          if (logs.length > 100) logs.pop()
+          eventLogEl.textContent = logs.join('\n')
+        }
+
+        window.sendAction = function(actionId, payload = {}) {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            logEvent(`socket not open: ${actionId}`)
+            return
+          }
+          logEvent(`-> ${actionId}`)
+          ws.send(JSON.stringify({ type: 'action', action_id: actionId, payload }))
+        }
+
+        window.commitChanges = function() {
+          const message = document.getElementById('commitMessage').value.trim()
+          if (!message) {
+            logEvent('commit cancelled: empty message')
+            return
+          }
+          window.sendAction('git.commit', { path: currentWorkspace, message })
+        }
+
+        window.switchBranch = function() {
+          const branch = gitBranchSelect.value
+          if (!branch) {
+            logEvent('no branch selected')
+            return
+          }
+          window.sendAction('git._switch_branch', { path: currentWorkspace, branch })
+        }
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+            document.querySelectorAll('.tab-panel').forEach(b => b.classList.remove('active'))
+            btn.classList.add('active')
+            document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active')
+          })
         })
+
+        async function init() {
+          console.log('Tact client init', { currentDeviceId, currentToken })
+          if (currentDeviceId) {
+            try {
+              const res = await fetch('/api/pair/status')
+              const data = await res.json()
+              console.log('Pairing status', data)
+              const paired = data.devices && data.devices.some(d => d.device_id === currentDeviceId)
+              if (paired) {
+                showPairing(false)
+                statusText.textContent = 'Connecting…'
+                connect()
+                return
+              } else {
+                console.log('Device not paired, clearing localStorage')
+                try {
+                  localStorage.removeItem('tact_device_id')
+                  localStorage.removeItem('tact_pair_token')
+                } catch (e) {}
+                currentDeviceId = ''
+                currentToken = ''
+              }
+            } catch (e) {
+              console.error('Pairing status check failed', e)
+            }
+          }
+          showPairing(true)
+        }
+
+        function showConnectionError(message) {
+          console.error('Connection error:', message)
+          statusText.textContent = message || 'Connection failed'
+          logEvent('Connection issue: ' + (message || 'unknown'))
+        }
+
+        init()
       })
-
-      async function init() {
-        const paired = await checkPairingStatus()
-        if (paired) {
-          connect()
-        }
-      }
-
-      init()
     </script>
   </body>
 </html>

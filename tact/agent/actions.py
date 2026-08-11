@@ -35,7 +35,11 @@ class ActionRegistry:
             "system.open_project": self._open_project,
             "vscode.open_workspace": self._open_workspace,
             "vscode.status": self._vscode_status,
+            "vscode.workspaces": self._vscode_workspaces,
             "git.status": self._git_status,
+            "git.branches": self._git_branches,
+            "git.tree": self._git_tree,
+            "git._switch_branch": self._git_switch_branch,
             "git.pull": self._git_pull,
             "git.push": self._git_push,
             "git.commit": self._git_commit,
@@ -95,27 +99,54 @@ class ActionRegistry:
         path = payload.get("path") if isinstance(payload, dict) else None
         return self.vscode.status(path)
 
+    def _vscode_workspaces(self, payload: dict):
+        return self.vscode.workspaces()
+
     def _git_status(self, payload: dict):
         path = payload.get("path") if isinstance(payload, dict) else None
         return self.git.status(path)
 
+    def _git_branches(self, payload: dict):
+        path = payload.get("path") if isinstance(payload, dict) else None
+        return self.git.branches(path)
+
+    def _git_tree(self, payload: dict):
+        path = payload.get("path") if isinstance(payload, dict) else None
+        max_depth = int(payload.get("max_depth") or 3) if isinstance(payload, dict) else 3
+        return self.git.tree(path, max_depth=max_depth)
+
+    def _vscode_workspaces(self, payload: dict):
+        return self.vscode.workspaces()
+
     def _git_pull(self, payload: dict):
         path = payload.get("path") if isinstance(payload, dict) else None
-        return self.git.pull(path)
+        branch = payload.get("branch") if isinstance(payload, dict) else None
+        args = ["pull", "--ff-only"]
+        if branch:
+            args.append(branch)
+        return self.git._run_git_action(path, args)
 
     def _git_push(self, payload: dict):
         path = payload.get("path") if isinstance(payload, dict) else None
-        # Guardrail: check if there are commits to push
-        if not self.git.has_unpushed_commits(path):
-            return {"ok": False, "error": "nothing_to_push"}
-        return self.git.push(path)
+        branch = payload.get("branch") if isinstance(payload, dict) else None
+        args = ["push"]
+        if branch:
+            args.append("origin")
+            args.append(branch)
+        return self.git._run_git_action(path, args)
+
+    def _git_switch_branch(self, payload: dict):
+        branch = payload.get("branch") if isinstance(payload, dict) else None
+        if not branch:
+            return {"ok": False, "error": "branch_required"}
+        path = payload.get("path") if isinstance(payload, dict) else None
+        return self.git._run_git_action(path, ["checkout", branch])
 
     def _git_commit(self, payload: dict):
         message = str(payload.get("message") or "") if isinstance(payload, dict) else ""
         if not message.strip():
             return {"ok": False, "error": "commit_message_required"}
         path = payload.get("path") if isinstance(payload, dict) else None
-        # Guardrail: ensure there are changes to commit
         if not self.git.is_dirty(path):
             return {"ok": False, "error": "nothing_to_commit", "message": "working directory is clean"}
         return self.git.commit(message, path)

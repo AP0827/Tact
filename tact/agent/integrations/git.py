@@ -101,6 +101,50 @@ class GitIntegration:
         status = self.status(root)
         return (status.get("ahead") or 0) > 0
 
+    def branches(self, start_path: str | Path | None = None) -> dict[str, Any]:
+        root = self.discover_root(start_path)
+        if root is None or not self.is_available():
+            return {"available": False, "branches": [], "current": None}
+        current = self._run_git(root, ["branch", "--show-current"])
+        all_branches = self._run_git(root, ["branch", "-a"]).splitlines()
+        cleaned = []
+        for b in all_branches:
+            b = b.strip()
+            if not b:
+                continue
+            if b.startswith("* "):
+                b = b[2:]
+            cleaned.append(b)
+        return {
+            "available": True,
+            "current": current or None,
+            "branches": cleaned,
+            "root": str(root),
+        }
+
+    def tree(self, start_path: str | Path | None = None, max_depth: int = 3) -> dict[str, Any]:
+        root = self.discover_root(start_path)
+        if root is None or not self.is_available():
+            return {"available": False, "tree": []}
+        output = self._run_git(root, ["ls-tree", "-r", "--name-only", "-z", "HEAD"])
+        if not output:
+            return {"available": True, "tree": [], "root": str(root)}
+        files = [f for f in output.split("\0") if f.strip()]
+        tree = []
+        for f in files:
+            parts = Path(f).parts
+            current = tree
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1:
+                    current.append({"name": part, "path": f, "type": "file"})
+                else:
+                    found = next((x for x in current if x.get("name") == part and x.get("type") == "dir"), None)
+                    if not found:
+                        found = {"name": part, "path": str(Path(*parts[: i + 1])), "type": "dir", "children": []}
+                        current.append(found)
+                    current = found["children"]
+        return {"available": True, "tree": tree, "root": str(root), "file_count": len(files)}
+
     def _run_git_action(self, start_path: str | Path | None, args: list[str]) -> dict[str, Any]:
         root = self.discover_root(start_path)
         if root is None:

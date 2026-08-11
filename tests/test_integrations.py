@@ -56,6 +56,70 @@ class GitIntegrationTests(unittest.TestCase):
         self.assertEqual(status["changed_files"], 1)
         self.assertFalse(status["clean"])
 
+    @patch("tact.agent.integrations.git.subprocess.run")
+    @patch("tact.agent.integrations.git.shutil_which", return_value="git")
+    def test_branches_lists_branches(self, mock_which, mock_run):
+        def run_side_effect(cmd, capture_output, text, check):
+            class Result:
+                def __init__(self, returncode=0, stdout="", stderr=""):
+                    self.returncode = returncode
+                    self.stdout = stdout
+                    self.stderr = stderr
+
+            if cmd[3:] == ["branch", "--show-current"]:
+                return Result(stdout="main\n")
+            if cmd[3:] == ["branch", "-a"]:
+                return Result(stdout="  main\n* dev\n  remotes/origin/feature\n")
+            return Result()
+
+        mock_run.side_effect = run_side_effect
+
+        integration = GitIntegration()
+        with patch.object(GitIntegration, "discover_root", return_value=Path("/repo")):
+            branches = integration.branches("/repo")
+
+        self.assertTrue(branches["available"])
+        self.assertEqual(branches["current"], "main")
+        self.assertIn("main", branches["branches"])
+        self.assertIn("dev", branches["branches"])
+        self.assertIn("remotes/origin/feature", branches["branches"])
+
+    @patch("tact.agent.integrations.git.subprocess.run")
+    @patch("tact.agent.integrations.git.shutil_which", return_value="git")
+    def test_tree_returns_file_list(self, mock_which, mock_run):
+        def run_side_effect(cmd, capture_output, text, check):
+            class Result:
+                def __init__(self, returncode=0, stdout="", stderr=""):
+                    self.returncode = returncode
+                    self.stdout = stdout
+                    self.stderr = stderr
+
+            if cmd[3:] == ["ls-tree", "-r", "--name-only", "-z", "HEAD"]:
+                return Result(stdout="README.md\0src/main.py\0src/utils/helper.py\0")
+            return Result()
+
+        mock_run.side_effect = run_side_effect
+
+        integration = GitIntegration()
+        with patch.object(GitIntegration, "discover_root", return_value=Path("/repo")):
+            tree = integration.tree("/repo")
+
+        self.assertTrue(tree["available"])
+        self.assertEqual(tree["file_count"], 3)
+
+        def collect_names(nodes):
+            names = []
+            for node in nodes:
+                names.append(node["name"])
+                if node.get("children"):
+                    names.extend(collect_names(node["children"]))
+            return names
+
+        names = collect_names(tree["tree"])
+        self.assertIn("README.md", names)
+        self.assertIn("main.py", names)
+        self.assertIn("helper.py", names)
+
 
 class VSCodeIntegrationTests(unittest.TestCase):
     @patch("tact.agent.integrations.vscode.subprocess.Popen")
@@ -68,6 +132,42 @@ class VSCodeIntegrationTests(unittest.TestCase):
         self.assertEqual(result["command"], "code")
         mock_popen.assert_called_once()
 
+    def test_workspaces_detects_open_folders(self):
+        import sys
+        import types
+        from pathlib import Path
+
+        integration = VSCodeIntegration()
+        integration._which = lambda cmd: cmd == "code" and "/usr/bin/code"
+
+        mock_psutil = types.ModuleType("psutil")
+        mock_proc = type("Proc", (), {
+            "info": {
+                "name": "code",
+                "cmdline": ["code", "/home/user/project"],
+            }
+        })()
+        mock_psutil.process_iter = lambda *args, **kwargs: [mock_proc]
+        mock_psutil.NoSuchProcess = Exception
+        mock_psutil.AccessDenied = Exception
+
+        sys.modules["psutil"] = mock_psutil
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                project_dir = Path(tmp) / "project"
+                project_dir.mkdir()
+                mock_proc.info["cmdline"] = ["code", str(project_dir)]
+
+                with patch.object(Path, "is_dir", return_value=True):
+                    result = integration.workspaces()
+
+                self.assertTrue(result["available"])
+                self.assertEqual(result["count"], 1)
+                self.assertIn(str(project_dir), result["workspaces"])
+        finally:
+            del sys.modules["psutil"]
+
 
 if __name__ == "__main__":
     unittest.main()
+

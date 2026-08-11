@@ -12,6 +12,10 @@ class ConnectionManager:
         self.active_connections.append(websocket)
         self.connection_meta[websocket] = meta
 
+    def register(self, websocket: WebSocket, **meta: Any):
+        self.active_connections.append(websocket)
+        self.connection_meta[websocket] = meta
+
     def disconnect(self, websocket: WebSocket):
         try:
             self.active_connections.remove(websocket)

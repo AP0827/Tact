@@ -53,6 +53,37 @@ class VSCodeIntegration:
             "workspace": str(workspace_path),
         }
 
+    def workspaces(self) -> dict[str, Any]:
+        names = {"code", "code-insiders", "codium"}
+        workspaces: list[str] = []
+        try:
+            import psutil
+
+            seen = set()
+            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+                try:
+                    name = (proc.info.get("name") or "").lower()
+                    cmdline = proc.info.get("cmdline") or []
+                    if not any(candidate in name for candidate in names):
+                        continue
+                    for arg in cmdline:
+                        if arg.startswith("-") or arg in names:
+                            continue
+                        p = Path(arg)
+                        if p.is_dir() and str(p) not in seen:
+                            seen.add(str(p))
+                            workspaces.append(str(p))
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except Exception:
+            pass
+        return {
+            "available": self.is_available(),
+            "running": self.is_running(),
+            "workspaces": workspaces,
+            "count": len(workspaces),
+        }
+
     def _which(self, command: str) -> Optional[str]:
         from shutil import which
 
