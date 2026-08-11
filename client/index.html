@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Tact Minimal Client</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 16px; }
+      .metric { margin: 8px 0; }
+      .section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd; }
+      .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+      button { padding: 12px 16px; font-size: 16px; }
+      pre { white-space: pre-wrap; word-break: break-word; background: #f6f6f6; padding: 12px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Tact — Minimal Client</h1>
+    <div id="status">Connecting…</div>
+    <div class="metric">CPU: <span id="cpu">-</span>%</div>
+    <div class="metric">Memory: <span id="memory">-</span>%</div>
+    <div class="metric">Workspace: <span id="workspace">-</span></div>
+    <div class="metric">Git: <span id="gitStatus">-</span></div>
+    <div class="metric">VS Code: <span id="vscodeStatus">-</span></div>
+
+    <div class="section">
+      <div>System</div>
+      <div class="buttons">
+        <button id="openBtn">Open example.com</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div>VS Code</div>
+      <div class="buttons">
+        <button id="vscodeOpenBtn">Open Workspace</button>
+        <button id="vscodeStatusBtn">Refresh Status</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div>Git</div>
+      <div class="buttons">
+        <button id="gitStatusBtn">Refresh Status</button>
+        <button id="gitPullBtn">Pull</button>
+        <button id="gitPushBtn">Push</button>
+        <button id="gitCommitBtn">Commit</button>
+      </div>
+    </div>
+
+    <div id="actionStatus" style="margin-top:12px;color:green"></div>
+    <pre id="actionLog"></pre>
+
+    <script>
+      const statusEl = document.getElementById('status')
+      const cpuEl = document.getElementById('cpu')
+      const memEl = document.getElementById('memory')
+      const workspaceEl = document.getElementById('workspace')
+      const gitStatusEl = document.getElementById('gitStatus')
+      const vscodeStatusEl = document.getElementById('vscodeStatus')
+      const openBtn = document.getElementById('openBtn')
+      const vscodeOpenBtn = document.getElementById('vscodeOpenBtn')
+      const vscodeStatusBtn = document.getElementById('vscodeStatusBtn')
+      const gitStatusBtn = document.getElementById('gitStatusBtn')
+      const gitPullBtn = document.getElementById('gitPullBtn')
+      const gitPushBtn = document.getElementById('gitPushBtn')
+      const gitCommitBtn = document.getElementById('gitCommitBtn')
+      const actionStatusEl = document.getElementById('actionStatus')
+      const actionLogEl = document.getElementById('actionLog')
+
+      let currentWorkspace = null
+
+      function appendLog(line) {
+        const ts = new Date().toLocaleTimeString()
+        actionLogEl.textContent = `[${ts}] ${line}\n` + actionLogEl.textContent
+      }
+
+      function sendAction(actionId, payload = {}) {
+        if (ws.readyState !== WebSocket.OPEN) {
+          appendLog(`socket not open: ${actionId}`)
+          return
+        }
+        ws.send(JSON.stringify({ type: 'action', action_id: actionId, payload }))
+        appendLog(`sent ${actionId} ${JSON.stringify(payload)}`)
+      }
+
+      const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
+      const wsUrl = `${scheme}://${location.host}/ws`
+      const ws = new WebSocket(wsUrl)
+
+      ws.addEventListener('open', () => {
+        statusEl.textContent = 'Connected'
+      })
+
+      ws.addEventListener('message', (ev) => {
+        try {
+          const msg = JSON.parse(ev.data)
+          if ((msg.type === 'init' || msg.type === 'telemetry') && msg.payload) {
+            const system = msg.payload.system || msg.payload
+            cpuEl.textContent = system.cpu ?? '-'
+            memEl.textContent = system.memory ?? '-'
+
+            const workspace = msg.payload.workspace || {}
+            currentWorkspace = workspace.git_root || workspace.cwd || currentWorkspace
+            workspaceEl.textContent = currentWorkspace || '-'
+
+            const git = workspace.git || {}
+            if (git && git.available) {
+              const ahead = git.ahead != null ? ` ↑${git.ahead}` : ''
+              const behind = git.behind != null ? ` ↓${git.behind}` : ''
+              gitStatusEl.textContent = `${git.branch || '(no branch)'}${ahead}${behind}${git.clean ? ' clean' : ` dirty (${git.changed_files})`}`
+            } else {
+              gitStatusEl.textContent = 'not available'
+            }
+
+            const vscode = workspace.vscode || {}
+            vscodeStatusEl.textContent = `${vscode.available ? 'available' : 'not available'}${vscode.running ? ' running' : ''}${vscode.command ? ` (${vscode.command})` : ''}`
+          } else if (msg.type === 'action_result') {
+            console.log('Action result', msg)
+            if (msg.result && msg.result.ok) {
+              actionStatusEl.textContent = `Action ${msg.action_id} OK: ${JSON.stringify(msg.result.result)}`
+              actionStatusEl.style.color = 'green'
+              appendLog(`ok ${msg.action_id} ${JSON.stringify(msg.result.result)}`)
+            } else {
+              actionStatusEl.textContent = `Action ${msg.action_id} ERROR: ${JSON.stringify(msg.result)}`
+              actionStatusEl.style.color = 'red'
+              appendLog(`error ${msg.action_id} ${JSON.stringify(msg.result)}`)
+            }
+          }
+        } catch (e) { console.error(e) }
+      })
+
+      ws.addEventListener('close', () => { statusEl.textContent = 'Disconnected' })
+
+      openBtn.addEventListener('click', () => {
+        sendAction('system.open_url', { url: 'https://example.com' })
+      })
+
+      vscodeOpenBtn.addEventListener('click', () => {
+        sendAction('vscode.open_workspace', { path: currentWorkspace || undefined })
+      })
+
+      vscodeStatusBtn.addEventListener('click', () => {
+        sendAction('vscode.status', { path: currentWorkspace || undefined })
+      })
+
+      gitStatusBtn.addEventListener('click', () => {
+        sendAction('git.status', { path: currentWorkspace || undefined })
+      })
+
+      gitPullBtn.addEventListener('click', () => {
+        sendAction('git.pull', { path: currentWorkspace || undefined })
+      })
+
+      gitPushBtn.addEventListener('click', () => {
+        sendAction('git.push', { path: currentWorkspace || undefined })
+      })
+
+      gitCommitBtn.addEventListener('click', () => {
+        const message = prompt('Commit message')
+        if (!message) {
+          appendLog('commit cancelled')
+          return
+        }
+        sendAction('git.commit', { path: currentWorkspace || undefined, message })
+      })
+    </script>
+  </body>
+</html>
