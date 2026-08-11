@@ -8,6 +8,7 @@ import shutil
 
 from .integrations.git import GitIntegration
 from .integrations.vscode import VSCodeIntegration
+from .integrations.system import SystemIntegration
 from .events import EventBus
 
 
@@ -21,9 +22,17 @@ class ActionRegistry:
     def __init__(self):
         self.git = GitIntegration()
         self.vscode = VSCodeIntegration()
+        self.system = SystemIntegration()
         self.event_bus = EventBus()
         self._registry = {
             "system.open_url": self._open_url,
+            "system.volume_up": self._volume_up,
+            "system.volume_down": self._volume_down,
+            "system.mute": self._mute,
+            "system.lock_screen": self._lock_screen,
+            "system.screenshot": self._screenshot,
+            "system.open_terminal": self._open_terminal,
+            "system.open_project": self._open_project,
             "vscode.open_workspace": self._open_workspace,
             "vscode.status": self._vscode_status,
             "git.status": self._git_status,
@@ -110,3 +119,26 @@ class ActionRegistry:
         if not self.git.is_dirty(path):
             return {"ok": False, "error": "nothing_to_commit", "message": "working directory is clean"}
         return self.git.commit(message, path)
+
+    def _volume_up(self, payload: dict):
+        return self.system.volume_up()
+
+    def _volume_down(self, payload: dict):
+        return self.system.volume_down()
+
+    def _mute(self, payload: dict):
+        return self.system.mute()
+
+    def _lock_screen(self, payload: dict):
+        return self.system.lock_screen()
+
+    def _screenshot(self, payload: dict):
+        return self.system.screenshot()
+
+    def _open_terminal(self, payload: dict):
+        path = payload.get("path") if isinstance(payload, dict) else None
+        return self.system.open_terminal(path)
+
+    def _open_project(self, payload: dict):
+        path = payload.get("path") if isinstance(payload, dict) else None
+        return self.system.open_project(path)

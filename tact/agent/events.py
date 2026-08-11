@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 
@@ -15,6 +15,8 @@ class Event:
     title: str
     message: str
     data: dict[str, Any]
+    severity: str = "info"
+    actions: list[str] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -24,6 +26,8 @@ class Event:
             "title": self.title,
             "message": self.message,
             "data": self.data,
+            "severity": self.severity,
+            "actions": self.actions or [],
         }
 
 
@@ -56,7 +60,7 @@ class EventBus:
         """Emit a simple event without constructing an Event object."""
         event = Event(
             event_type=event_type,
-            timestamp=datetime.utcnow().timestamp(),
+            timestamp=datetime.now(timezone.utc).timestamp(),
             source=source,
             title=title,
             message=message,

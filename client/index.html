@@ -210,12 +210,52 @@
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
       }
+
+      .pairing-overlay {
+        position: fixed;
+        inset: 0;
+        background: #2d2d2d;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 1000;
+        gap: 16px;
+      }
+
+      .pairing-overlay input {
+        padding: 12px;
+        border-radius: 4px;
+        border: none;
+        font-size: 16px;
+        width: 100%;
+        max-width: 320px;
+      }
+
+      .pairing-overlay button {
+        max-width: 320px;
+        width: 100%;
+      }
+
+      .hidden {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
+    <div id="pairingOverlay" class="pairing-overlay hidden">
+      <h2>Pair with Tact Desktop Agent</h2>
+      <p id="pairingStep1">Enter the pairing code shown on your desktop.</p>
+      <input id="pairingToken" placeholder="Pairing token" autocomplete="off" />
+      <button onclick="window.pairWithAgent()">Pair</button>
+      <p id="pairingError" style="color:#f8d7da;font-size:12px;"></p>
+    </div>
+
     <nav>
       <div>
-        <h1>⚙️ Tact</h1>
+        <h1>Tact</h1>
       </div>
       <div class="status">
         <span class="connection-status" id="connStatus"></span>
@@ -232,7 +272,6 @@
       </div>
 
       <div class="content">
-        <!-- System Tab -->
         <div id="system-tab" class="tab-panel active">
           <div class="card">
             <h2>System Status</h2>
@@ -248,6 +287,10 @@
             </div>
             <div class="metric-group">
               <div class="metric">
+                <div class="metric-label">Disk</div>
+                <div class="metric-value"><span id="disk">-</span>%</div>
+              </div>
+              <div class="metric">
                 <div class="metric-label">Workspace</div>
                 <div class="metric-value" style="font-size: 12px;"><span id="workspace">-</span></div>
               </div>
@@ -255,16 +298,20 @@
           </div>
 
           <div class="card">
-            <h2>Quick Actions</h2>
+            <h2>Actions</h2>
             <div class="buttons">
-              <button onclick="window.sendAction('system.open_url', { url: 'https://example.com' })">
-                Open Example
-              </button>
+              <button onclick="window.sendAction('system.open_url', { url: 'https://example.com' })">Open Example</button>
+              <button onclick="window.sendAction('system.open_terminal')">Terminal</button>
+              <button onclick="window.sendAction('system.open_project')">Open Project</button>
             </div>
+            <div class="buttons">
+              <button onclick="window.sendAction('system.lock_screen')">Lock Screen</button>
+              <button onclick="window.sendAction('system.screenshot')">Screenshot</button>
+            </div>
+            <div id="systemResult" class="last-result" style="display:none;"></div>
           </div>
         </div>
 
-        <!-- VS Code Tab -->
         <div id="vscode-tab" class="tab-panel">
           <div class="card">
             <h2>
@@ -285,7 +332,6 @@
           </div>
         </div>
 
-        <!-- Git Tab -->
         <div id="git-tab" class="tab-panel">
           <div class="card">
             <h2>
@@ -312,7 +358,6 @@
           </div>
         </div>
 
-        <!-- Events Log Tab -->
         <div id="log-tab" class="tab-panel">
           <div class="card">
             <h2>Event Log</h2>
@@ -327,6 +372,7 @@
       const statusText = document.getElementById('statusText')
       const cpuEl = document.getElementById('cpu')
       const memEl = document.getElementById('memory')
+      const diskEl = document.getElementById('disk')
       const workspaceEl = document.getElementById('workspace')
       const gitBranchEl = document.getElementById('gitBranch')
       const gitCleanEl = document.getElementById('gitClean')
@@ -336,67 +382,168 @@
       const eventLogEl = document.getElementById('eventLog')
       const vscodeResultEl = document.getElementById('vscodeResult')
       const gitResultEl = document.getElementById('gitResult')
+      const systemResultEl = document.getElementById('systemResult')
+      const pairingOverlay = document.getElementById('pairingOverlay')
+      const pairingTokenInput = document.getElementById('pairingToken')
+      const pairingError = document.getElementById('pairingError')
 
       let currentWorkspace = null
       let logs = []
+      let ws = null
+      let reconnectAttempts = 0
+      let currentToken = localStorage.getItem('tact_pair_token') || ''
+      let currentDeviceId = localStorage.getItem('tact_device_id') || ''
 
-      const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
-      const wsUrl = `${scheme}://${location.host}/ws`
-      const ws = new WebSocket(wsUrl)
-
-      ws.addEventListener('open', () => {
-        connStatus.classList.add('connected')
-        statusText.textContent = 'Connected'
-      })
-
-      ws.addEventListener('message', (ev) => {
-        try {
-          const msg = JSON.parse(ev.data)
-          if ((msg.type === 'init' || msg.type === 'telemetry') && msg.payload) {
-            const system = msg.payload.system || msg.payload
-            cpuEl.textContent = Math.round(system.cpu ?? 0)
-            memEl.textContent = Math.round(system.memory ?? 0)
-
-            const workspace = msg.payload.workspace || {}
-            currentWorkspace = workspace.git_root || workspace.cwd || currentWorkspace
-            workspaceEl.textContent = currentWorkspace ? currentWorkspace.split('/').pop() : '-'
-
-            const git = workspace.git || {}
-            if (git && git.available) {
-              gitBranchEl.textContent = git.branch || '(no branch)'
-              gitCleanEl.textContent = git.clean ? 'clean' : `dirty (${git.changed_files || 0})`
-              gitStateEl.textContent = git.clean ? 'CLEAN' : 'DIRTY'
-              gitStateEl.className = 'status-badge ' + (git.clean ? 'ok' : 'error')
-            }
-
-            const vscode = workspace.vscode || {}
-            vscodeStatusEl.textContent = `${vscode.available ? 'available' : 'not available'}${vscode.running ? ' • running' : ''}`
-            vscodeStateEl.textContent = vscode.running ? 'RUNNING' : 'STOPPED'
-            vscodeStateEl.className = 'status-badge ' + (vscode.running ? 'ok' : 'info')
-          } else if (msg.type === 'event' && msg.payload) {
-            const evt = msg.payload
-            logEvent(`[${evt.source}] ${evt.title}: ${evt.message}`)
-          } else if (msg.type === 'action_result') {
-            const resultMsg = msg.result.ok ? `✓ ${msg.action_id}` : `✗ ${msg.action_id}: ${msg.result.error || 'unknown error'}`
-            logEvent(resultMsg)
-            
-            if (msg.action_id === 'vscode.status' || msg.action_id === 'vscode.open_workspace') {
-              vscodeResultEl.textContent = JSON.stringify(msg.result, null, 2)
-              vscodeResultEl.style.display = 'block'
-            } else if (msg.action_id.startsWith('git.')) {
-              gitResultEl.textContent = JSON.stringify(msg.result, null, 2)
-              gitResultEl.style.display = 'block'
-            }
-          }
-        } catch (e) { 
-          console.error(e) 
+      function showPairing(show) {
+        if (show) {
+          pairingOverlay.classList.remove('hidden')
+        } else {
+          pairingOverlay.classList.add('hidden')
         }
-      })
+      }
 
-      ws.addEventListener('close', () => {
-        connStatus.classList.remove('connected')
-        statusText.textContent = 'Disconnected'
-      })
+      async function pairWithAgent() {
+        const token = pairingTokenInput.value.trim()
+        if (!token) return
+        pairingError.textContent = ''
+        try {
+          const res = await fetch('/api/pair/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, device_id: token, label: 'phone-' + Math.floor(Math.random() * 10000) }),
+          })
+          if (!res.ok) {
+            const err = await res.json()
+            pairingError.textContent = err.detail || 'Pairing failed'
+            return
+          }
+          currentToken = token
+          currentDeviceId = token
+          localStorage.setItem('tact_pair_token', currentToken)
+          localStorage.setItem('tact_device_id', currentDeviceId)
+          showPairing(false)
+          connect()
+        } catch (e) {
+          pairingError.textContent = 'Network error'
+        }
+      }
+
+      window.pairWithAgent = pairWithAgent
+
+      async function checkPairingStatus() {
+        try {
+          const res = await fetch('/api/pair/status')
+          const data = await res.json()
+          if (data.paired && currentDeviceId && data.devices.some(d => d.device_id === currentDeviceId)) {
+            showPairing(false)
+            return true
+          }
+          if (data.pairing_token) {
+            showPairing(true)
+            pairingTokenInput.value = data.pairing_token
+            return false
+          }
+          showPairing(true)
+          return false
+        } catch (e) {
+          return false
+        }
+      }
+
+      function connect() {
+        if (ws) {
+          try { ws.close() } catch (e) { /* ignore */ }
+        }
+        const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
+        const wsUrl = `${scheme}://${location.host}/ws`
+        ws = new WebSocket(wsUrl)
+
+        ws.addEventListener('open', () => {
+          connStatus.classList.add('connected')
+          statusText.textContent = 'Connected'
+          reconnectAttempts = 0
+          ws.send(JSON.stringify({ type: 'auth', token: currentToken, label: 'phone' }))
+        })
+
+        ws.addEventListener('message', (ev) => {
+          try {
+            const msg = JSON.parse(ev.data)
+            if (msg.type === 'error') {
+              logEvent(`Error: ${msg.message}`)
+              if (msg.message === 'unauthorized' || msg.message === 'auth_required') {
+                showPairing(true)
+              }
+              return
+            }
+            if ((msg.type === 'init' || msg.type === 'telemetry') && msg.payload) {
+              const system = msg.payload.system || msg.payload
+              cpuEl.textContent = Math.round(system.cpu ?? 0)
+              memEl.textContent = Math.round(system.memory ?? 0)
+              diskEl.textContent = system.disk !== null && system.disk !== undefined ? Math.round(system.disk) : '-'
+
+              const workspace = msg.payload.workspace || {}
+              currentWorkspace = workspace.git_root || workspace.cwd || currentWorkspace
+              workspaceEl.textContent = currentWorkspace ? currentWorkspace.split('/').pop() : '-'
+
+              const git = workspace.git || {}
+              if (git && git.available) {
+                gitBranchEl.textContent = git.branch || '(no branch)'
+                gitCleanEl.textContent = git.clean ? 'clean' : `dirty (${git.changed_files || 0})`
+                gitStateEl.textContent = git.clean ? 'CLEAN' : 'DIRTY'
+                gitStateEl.className = 'status-badge ' + (git.clean ? 'ok' : 'error')
+              }
+
+              const vscode = workspace.vscode || {}
+              vscodeStatusEl.textContent = `${vscode.available ? 'available' : 'not available'}${vscode.running ? ' • running' : ''}`
+              vscodeStateEl.textContent = vscode.running ? 'RUNNING' : 'STOPPED'
+              vscodeStateEl.className = 'status-badge ' + (vscode.running ? 'ok' : 'info')
+            } else if (msg.type === 'event' && msg.payload) {
+              const evt = msg.payload
+              const severity = evt.severity || 'info'
+              const prefix = severity === 'error' ? 'ERROR' : severity === 'warning' ? 'WARN' : 'INFO'
+              logEvent(`[${prefix}] [${evt.source}] ${evt.title}: ${evt.message}`)
+            } else if (msg.type === 'action_result') {
+              const resultMsg = msg.result.ok ? `ok ${msg.action_id}` : `fail ${msg.action_id}: ${msg.result.error || 'unknown error'}`
+              logEvent(resultMsg)
+              
+              if (msg.action_id === 'vscode.status' || msg.action_id === 'vscode.open_workspace') {
+                vscodeResultEl.textContent = JSON.stringify(msg.result, null, 2)
+                vscodeResultEl.style.display = 'block'
+              } else if (msg.action_id.startsWith('git.')) {
+                gitResultEl.textContent = JSON.stringify(msg.result, null, 2)
+                gitResultEl.style.display = 'block'
+              } else if (msg.action_id.startsWith('system.')) {
+                systemResultEl.textContent = JSON.stringify(msg.result, null, 2)
+                systemResultEl.style.display = 'block'
+              }
+            }
+          } catch (e) { 
+            console.error(e) 
+          }
+        })
+
+        ws.addEventListener('close', () => {
+          connStatus.classList.remove('connected')
+          statusText.textContent = 'Disconnected'
+          scheduleReconnect()
+        })
+
+        ws.addEventListener('error', () => {
+          connStatus.classList.remove('connected')
+          statusText.textContent = 'Error'
+        })
+      }
+
+      function scheduleReconnect() {
+        if (reconnectAttempts >= 10) return
+        const delay = Math.min(1000 * 2 ** reconnectAttempts, 30000)
+        reconnectAttempts += 1
+        setTimeout(() => {
+          if (currentToken) {
+            connect()
+          }
+        }, delay)
+      }
 
       function logEvent(line) {
         const ts = new Date().toLocaleTimeString()
@@ -406,11 +553,11 @@
       }
 
       window.sendAction = function(actionId, payload = {}) {
-        if (ws.readyState !== WebSocket.OPEN) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
           logEvent(`socket not open: ${actionId}`)
           return
         }
-        logEvent(`→ ${actionId}`)
+        logEvent(`-> ${actionId}`)
         ws.send(JSON.stringify({ type: 'action', action_id: actionId, payload }))
       }
 
@@ -427,11 +574,20 @@
       document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
-          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+          document.querySelectorAll('.tab-panel').forEach(b => b.classList.remove('active'))
           btn.classList.add('active')
           document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active')
         })
       })
+
+      async function init() {
+        const paired = await checkPairingStatus()
+        if (paired) {
+          connect()
+        }
+      }
+
+      init()
     </script>
   </body>
 </html>

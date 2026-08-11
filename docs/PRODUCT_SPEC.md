@@ -1,16 +1,29 @@
 # Tact — Developer Productivity Control Surface
 
-## Coding Agent Project Context & Development Brief
+## Complete Product & Engineering Specification
 
-You are the primary coding agent responsible for developing **Tact**, a software product that turns a user's mobile device into a dynamic second interface for their computer.
+You are the primary coding agent responsible for developing **Tact**, a developer-focused software product that turns a user's mobile device into a dynamic second interface for their computer.
 
-You should behave as a senior software engineer and product engineer. Prioritize a clean architecture, working software, incremental development, security, maintainability, and a strong MVP over unnecessary complexity.
+You should operate as a senior software engineer, systems architect, and product engineer.
+
+Prioritize:
+
+* working software
+* clean architecture
+* incremental development
+* security
+* maintainability
+* excellent UX
+* developer usefulness
+* product validation
+
+Do not over-engineer for hypothetical future requirements.
 
 ---
 
-# 1. Product Context
+# 1. PRODUCT CONTEXT
 
-## What is Tact?
+## 1.1 What is Tact?
 
 Tact is a **developer-focused second interface for a computer**.
 
@@ -20,531 +33,295 @@ The computer runs a lightweight **Tact Desktop Agent**.
 
 The phone connects to that agent over the local network and renders a dynamic interface.
 
-Conceptually:
+The fundamental architecture is:
 
+```text
+                    COMPUTER
+                        │
+              ┌─────────▼─────────┐
+              │   TACT AGENT      │
+              │                   │
+              │ Context           │
+              │ Telemetry         │
+              │ Actions           │
+              │ Events            │
+              │ Layouts           │
+              └─────────┬─────────┘
+                        │
+                  WebSocket / LAN
+                        │
+              ┌─────────▼─────────┐
+              │    TACT CLIENT    │
+              │                   │
+              │ Mobile Web UI     │
+              │ Controls          │
+              │ Widgets           │
+              │ Notifications     │
+              └───────────────────┘
 ```
-┌───────────────────────┐
-│       COMPUTER        │
-│                       │
-│   Tact Desktop Agent  │
-└───────────┬───────────┘
-            │
-      WebSocket / LAN
-            │
-            ▼
-┌───────────────────────┐
-│        PHONE          │
-│                       │
-│     Tact Client       │
-│                       │
-│ buttons / widgets     │
-│ metrics / events      │
-│ notifications         │
-└───────────────────────┘
-```
 
-Tact is NOT intended to initially be another Stream Deck clone.
+The laptop is the **brain**.
 
-Existing products already provide customizable mobile macro/control surfaces.
-
-The long-term product thesis is:
-
-> **Tact is a dynamic second interface for developers: it understands what the developer is doing, displays relevant state/information, and provides contextual actions to interact with the workflow.**
-
-The initial target user is a **software developer working from home or spending significant time at a computer**.
+The phone is the **interface**.
 
 ---
 
-# 2. Product Vision
+# 2. PRODUCT THESIS
 
-Tact should eventually become a developer's "cockpit" beside their laptop.
+Tact is NOT intended to initially be another Stream Deck clone.
 
-A developer might have:
+Existing products already prove that phones can act as customizable control surfaces.
 
-* VS Code / JetBrains IDE
+The central Tact thesis is:
+
+> **Tact is a dynamic second interface for developers: it understands what the developer is doing, displays relevant state and information, and provides contextual actions to interact with the workflow.**
+
+The key distinction is:
+
+> **Tact provides both state and control, not merely buttons.**
+
+A useful Tact screen should answer two questions:
+
+1. What is happening?
+2. What can I do about it?
+
+---
+
+# 3. TARGET USER
+
+The initial target user is:
+
+> **A software developer who spends significant time working from a laptop/desktop, particularly remote developers, freelancers, startup engineers, students, and independent developers.**
+
+The primary workflow includes:
+
+* VS Code
+* JetBrains IDEs
 * Git
 * GitHub/GitLab
 * Docker
 * terminal
-* PostgreSQL
+* databases
 * browser
 * Spotify
-* Microsoft Teams / Slack / Zoom
-* ChatGPT / Claude / Gemini / coding AI
-* local development services
+* Teams / Slack / Zoom
+* ChatGPT / Claude / Gemini
+* coding agents
 
-Tact should provide a persistent secondary interface containing:
-
-### Information
-
-* CPU/RAM/system status
-* Git branch/status
-* build status
-* test status
-* Docker container status
-* CI/CD status
-* notifications
-* meeting state
-* development events
-* logs/errors
-
-### Actions
-
-* Run
-* Build
-* Test
-* Git actions
-* Docker actions
-* Terminal actions
-* Media controls
-* Meeting controls
-* AI actions
-* Open application/file/URL
-* Debug/rebuild/retry actions
-
-The critical distinction is:
-
-> Tact should provide both **state and control**, not merely buttons.
+The product should be **developer-first**, not generic remote-control software.
 
 ---
 
-# 3. Existing Competition
+# 4. PRODUCT DIFFERENTIATION
 
-The product exists in a category with products such as:
-
-* Elgato Stream Deck Mobile
-* Touch Portal
-* Unified Remote
-* other macro-pad / remote-control applications
-
-Therefore, do NOT build the MVP around the assumption that "phone + buttons" is novel.
-
-Tact's differentiation should eventually come from:
+Tact should eventually differentiate through:
 
 1. Developer-first workflows
 2. Rich developer information
 3. Context-aware interfaces
 4. Event-driven notifications
 5. Development-state monitoring
-6. AI-generated workspaces
-7. Rich widgets rather than only buttons
-8. A declarative interface/action protocol
-9. Extensible integrations/plugins
+6. Actionable developer notifications
+7. Rich widgets rather than button grids
+8. Declarative UI/action protocol
+9. Extensible integrations
+10. AI-generated workspaces
+11. AI-assisted debugging workflows
+12. Workflow-aware interfaces
+13. Local-first architecture
+14. Eventually, dedicated Tact hardware
 
-Do not attempt to implement all of these immediately.
+Do not attempt to implement these simultaneously.
+
+They are developed progressively through the roadmap below.
 
 ---
 
-# 4. Development Strategy
+# 5. PRODUCT ROADMAP
 
-The product will be developed incrementally.
+The product is divided into the following phases:
 
-The immediate target is:
+```text
+PHASE 0  — Foundation / Proof of Concept
+    ↓
+V0.1     — Developer Control Surface
+    ↓
+V0.2     — Developer Event System
+    ↓
+V0.3     — Developer Workspace
+    ↓
+V0.4     — Context-Aware Tact
+    ↓
+V0.5     — Rich Developer Integrations
+    ↓
+V0.6     — AI Workspace Generation
+    ↓
+V0.7     — AI Developer Assistant
+    ↓
+V0.8     — Plugin / Integration Platform
+    ↓
+V0.9     — Public Beta / Productization
+    ↓
+V1.0     — Commercial Developer Product
+    ↓
+V1.x     — Cloud / Sync / Ecosystem
+    ↓
+V2.0     — Physical Tact Hardware
+```
 
-## V0.1 — Developer Control Surface
+The exact version numbers are not sacred.
 
-Prove that a phone can act as a useful developer control surface.
+The architectural and product boundaries are more important than the labels.
 
-Core integrations:
+---
+
+# 6. PHASE 0 — FOUNDATION / PROOF OF CONCEPT
+
+## Goal
+
+Prove the fundamental interaction:
+
+> Phone → Tact → laptop action
+
+The first successful demonstration should be:
+
+```text
+Open Tact on phone
+        ↓
+See Tact interface
+        ↓
+Press button
+        ↓
+Laptop responds immediately
+```
+
+## Requirements
+
+Create:
+
+* minimal Python desktop agent
+* minimal React mobile client
+* WebSocket connection
+* one declarative button
+* one safe laptop action
+
+Example:
+
+```text
+Phone
+  │
+  │ WebSocket
+  ▼
+Tact Agent
+  │
+  ▼
+system.volume_up
+```
+
+## Success criterion
+
+A developer can run Tact locally and control one aspect of the laptop from the phone.
+
+Do not build anything else until this works.
+
+---
+
+# 7. V0.1 — DEVELOPER CONTROL SURFACE
+
+## Goal
+
+Prove that Tact is useful during a real coding session.
+
+## Core integrations
 
 * System
 * VS Code
 * Git
 * Docker
 
-Core capabilities:
+## Core capabilities
 
 * WebSocket communication
+* responsive mobile UI
 * dynamic UI
 * buttons/actions
 * system telemetry
-* basic development status
-* basic layouts
-* persistent configuration
-
-## V0.2 — Developer Event System
-
-Add:
-
-* build failure events
-* test failure events
-* Docker state changes
-* Git state changes
-* developer-focused notifications
-* actionable notifications
-* richer development status
-* event-driven UI updates
-
-V0.2 should make Tact feel like a **developer companion**, rather than simply a remote control.
-
-Do NOT implement AI-generated workspaces, native mobile applications, hardware, marketplace functionality, or a large plugin ecosystem before V0.2 is stable.
+* development status
+* layouts
+* persistent local configuration
+* basic pairing
 
 ---
 
-# 5. Core Architecture
+## 7.1 Desktop Agent
 
-Use a three-layer architecture:
-
-```
-┌────────────────────────────────────┐
-│          TACT DESKTOP AGENT        │
-│                                    │
-│ Context Engine                     │
-│ Telemetry Engine                   │
-│ Action Engine                      │
-│ Event Engine                       │
-│ Layout/State Manager               │
-│ WebSocket Server                   │
-└──────────────────┬─────────────────┘
-                   │
-             WebSocket / LAN
-                   │
-┌──────────────────▼─────────────────┐
-│            TACT CLIENT              │
-│                                    │
-│ React + TypeScript                 │
-│ Dynamic UI renderer                │
-│ Event handling                     │
-│ Layout rendering                   │
-└────────────────────────────────────┘
-```
-
-The laptop is the **brain**.
-
-The mobile browser is the **interface**.
-
----
-
-# 6. Technology Stack
-
-Use the following stack unless there is a strong technical reason to deviate.
-
-## Desktop Agent
-
-* Python
-* FastAPI
-* WebSockets
-* Pydantic
-* psutil
-* subprocess / OS APIs where necessary
-* SQLite or JSON for simple local persistence
-
-## Frontend
-
-* React
-* TypeScript
-* Vite
-* Tailwind CSS
-
-## Communication
-
-Primary:
-
-* WebSocket over local Wi-Fi/LAN
-
-REST may be used for:
-
-* configuration
-* health checks
-* initial state
-* metadata
-* pairing
-
-WebSocket should handle:
-
-* real-time state
-* events
-* actions
-* layout changes
-* notifications
-* telemetry updates
-
-Do NOT introduce Redis, Kafka, PostgreSQL, Docker, Kubernetes, cloud infrastructure, or microservices for the MVP unless there is an actual demonstrated need.
-
-This is a local desktop application.
-
-Keep the architecture simple.
-
----
-
-# 7. Repository Structure
-
-Prefer a structure along these lines:
-
-```
-tact/
-├── agent/
-│   ├── api/
-│   ├── actions/
-│   ├── context/
-│   ├── events/
-│   ├── telemetry/
-│   ├── layouts/
-│   ├── integrations/
-│   ├── websocket/
-│   ├── config/
-│   └── main.py
-│
-├── client/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── widgets/
-│   │   ├── layouts/
-│   │   ├── websocket/
-│   │   ├── state/
-│   │   └── types/
-│   └── ...
-│
-├── tests/
-├── docs/
-├── README.md
-└── ...
-```
-
-You may adjust this structure if necessary, but maintain clear separation between:
-
-* transport
-* domain logic
-* integrations
-* UI
-* configuration
-* event handling
-
-Do not create arbitrary layers merely for the sake of abstraction.
-
----
-
-# 8. Most Important Architectural Principle: Declarative UI
-
-Do NOT hardcode application-specific interfaces into React.
-
-Avoid designs such as:
-
-```
-if application == "vscode":
-    renderVSCodeButtons()
-```
-
-Instead, the desktop agent should be able to describe the interface.
-
-For example:
-
-```
-{
-  "type": "button",
-  "id": "vscode.run",
-  "label": "Run",
-  "action": "vscode.run"
-}
-```
-
-Or:
-
-```
-{
-  "type": "metric",
-  "id": "system.cpu",
-  "label": "CPU",
-  "value": 42,
-  "unit": "%"
-}
-```
-
-Or:
-
-```
-{
-  "type": "status",
-  "id": "docker.postgres",
-  "label": "PostgreSQL",
-  "state": "healthy"
-}
-```
-
-The client renders these components.
-
-This is a fundamental part of Tact's future architecture.
-
----
-
-# 9. Initial UI Primitives
-
-Implement a small widget system.
-
-At minimum:
-
-### Control widgets
-
-* Button
-* Toggle
-* Slider
-
-### Information widgets
-
-* Metric
-* Status
-* Progress
-* Notification
-* Text
-
-Do not build dozens of widgets.
-
-Make these few widgets reliable and extensible.
-
-Every widget should have:
-
-* stable ID
-* type
-* display properties
-* optional state
-* optional action
-* predictable serialization
-
----
-
-# 10. Action Architecture
-
-Do NOT allow arbitrary shell commands to be sent directly from the phone.
-
-Never implement a generic:
-
-```
-execute arbitrary command
-```
-
-endpoint.
-
-Instead, create an **allowlisted Action Registry**.
-
-Example:
-
-```
-system.lock
-system.volume_up
-system.volume_down
-system.screenshot
-
-vscode.run
-vscode.build
-vscode.test
-
-git.status
-git.commit
-git.push
-
-docker.list
-docker.restart
-docker.logs
-```
-
-Actions should be registered by integrations.
-
-The mobile client sends an action ID.
-
-The desktop agent validates and executes the action.
-
-Conceptually:
-
-```
-Phone
-   │
-   ▼
-Action ID
-   │
-   ▼
-Action Registry
-   │
-   ▼
-Authorized handler
-   │
-   ▼
-Operating system / application
-```
-
-This is important for both architecture and security.
-
----
-
-# 11. V0.1 Features
-
-Implement the following.
-
-## 11.1 Desktop Agent
-
-The agent should:
+The agent must:
 
 * start locally
 * expose HTTP/WebSocket server
 * determine local network address
-* accept a mobile connection
+* accept mobile connection
 * maintain connection state
-* send initial application state
+* send initial state
 * receive actions
 * execute registered actions
 * emit events
+* handle disconnection
+* reconnect safely
 
-The agent should be easy to start during development.
+Development command:
 
-Example:
-
-```
+```bash
 python -m tact.agent
 ```
 
-Eventually this can become a packaged executable/service.
-
 ---
 
-# 12. V0.1 Mobile Client
+## 7.2 Mobile Client
 
-For V0.1, the mobile client is a **responsive web application**.
+V0.1 uses a **responsive web application**.
 
-Do NOT create native Android/iOS applications yet.
+Do NOT build native Android/iOS applications.
 
-The user should be able to open something like:
+The phone should access something similar to:
 
-```
+```text
 http://<laptop-ip>:<port>
 ```
 
-from their phone.
-
-The UI should be designed primarily for:
+The UI should prioritize:
 
 * portrait mobile screens
-* touch interaction
+* touch
 * large controls
-* readable status information
-
-Do not optimize for desktop first.
+* readable information
+* low latency
 
 ---
 
-# 13. V0.1 System Integration
+## 7.3 System Integration
 
-Implement basic system information:
+Display:
 
-* CPU usage
-* RAM usage
-* disk usage
-* battery state if available
+* CPU
+* RAM
+* disk
+* battery
 * hostname
 * OS
 * uptime
 
 Use `psutil` where possible.
 
-The data should update periodically.
+Use sensible update intervals.
 
-Do not stream telemetry dozens of times per second.
-
-Use sensible intervals and only send changed/meaningful values where practical.
+Do not continuously stream unnecessary telemetry.
 
 ---
 
-# 14. V0.1 System Actions
+## 7.4 System Actions
 
-Implement a small safe set:
+Implement:
 
 * volume up
 * volume down
@@ -552,87 +329,79 @@ Implement a small safe set:
 * lock screen
 * screenshot
 
-OS-specific behavior should be isolated behind platform abstractions.
+Use a platform abstraction:
 
-Do not scatter Linux/Windows/macOS conditionals throughout the codebase.
-
-Use an abstraction such as:
-
-```
+```text
 SystemController
+├── LinuxSystemController
+├── WindowsSystemController
+└── MacOSSystemController
 ```
 
-with platform-specific implementations where necessary.
+Do not scatter platform-specific logic throughout the codebase.
 
 ---
 
-# 15. V0.1 VS Code Integration
+## 7.5 VS Code
 
-Start with practical controls rather than trying to deeply integrate with VS Code internals.
-
-Implement:
+Implement practical controls:
 
 * open VS Code
-* detect whether VS Code is active
-* run/build/test where safely possible
-* open terminal
-* command palette if feasible
-* detect active project/workspace where practical
+* detect active VS Code
+* run
+* build
+* test
+* terminal
+* command palette where feasible
+* active project/workspace detection where feasible
 
-If a capability requires OS-specific automation, isolate it behind an integration layer.
-
-Do not build a complicated VS Code extension unless it becomes necessary.
+Do not build a complex VS Code extension unless required.
 
 ---
 
-# 16. V0.1 Git Integration
+## 7.6 Git
 
-Tact should detect the current project/repository when possible.
+Display:
 
-Expose:
-
-* current branch
+* repository
+* branch
 * clean/dirty state
-* number of changed files
-* ahead/behind counts where available
+* changed files
+* ahead/behind
 * latest commit
 
 Actions:
 
-* git status
+* status
 * pull
 * push
 * commit workflow
 
-Do NOT implement an entire Git client.
+Use Git CLI safely.
 
-Use Git CLI safely through a controlled integration layer.
+Do not implement a Git client.
 
 ---
 
-# 17. V0.1 Docker Integration
-
-If Docker is installed:
+## 7.7 Docker
 
 Display:
 
-```
-container name
-running/stopped state
-image
-uptime
-```
-
-Example:
-
-```
+```text
 Docker
-─────────────────
+
 ● api
 ● postgres
 ● redis
 ✕ collector
 ```
+
+For each container:
+
+* name
+* state
+* image
+* uptime
 
 Actions:
 
@@ -641,83 +410,59 @@ Actions:
 * restart
 * logs
 
-Do not expose arbitrary Docker commands from the client.
+Do not expose arbitrary Docker commands.
 
 ---
 
-# 18. V0.1 Developer Dashboard
+# 8. V0.2 — DEVELOPER EVENT SYSTEM
 
-The default interface should communicate useful state.
+## Goal
 
-A rough conceptual layout:
+Move Tact from:
 
-```
-┌─────────────────────────────┐
-│ TACT                        │
-│ Development                 │
-├─────────────────────────────┤
-│ PROJECT                     │
-│ optilab                     │
-│ main ↑2 ↓0                 │
-├─────────────────────────────┤
-│ SYSTEM                      │
-│ CPU 34%   RAM 61%           │
-├─────────────────────────────┤
-│ DOCKER                      │
-│ ● api                       │
-│ ● postgres                  │
-│ ✕ collector                 │
-├─────────────────────────────┤
-│ [RUN] [TEST] [BUILD]        │
-│ [GIT] [DOCKER] [TERMINAL]   │
-└─────────────────────────────┘
-```
+> remote control
 
-This is only a conceptual reference.
+to:
 
-Do not blindly copy this exact layout.
+> **developer companion**
 
-The UI should remain modular.
-
----
-
-# 19. V0.2 — Event System
-
-The major objective of V0.2 is:
+The core principle:
 
 > **Tact should tell the developer when something important happens.**
 
-Implement a central event bus inside the desktop agent.
+---
 
-Conceptually:
+## 8.1 Event Bus
 
-```
+Create a central event bus.
+
+```text
 Integration
-    │
-    ▼
-Event Bus
-    │
-    ├── WebSocket
-    ├── Notification system
-    ├── State manager
-    └── Logs
+     │
+     ▼
+ Event Bus
+     │
+ ├── WebSocket
+ ├── Notification system
+ ├── State manager
+ └── Logs
 ```
 
-Events should have:
+Every event should contain:
 
-* event ID
-* event type
+* ID
+* type
 * timestamp
 * severity
 * source
 * title
 * message
-* optional metadata
+* metadata
 * optional actions
 
 Example:
 
-```
+```json
 {
   "type": "build.failed",
   "severity": "error",
@@ -734,13 +479,13 @@ Example:
 
 ---
 
-# 20. V0.2 Events
+## 8.2 Events
 
-Implement at least:
+Implement:
 
 ### Build
 
-```
+```text
 build.started
 build.succeeded
 build.failed
@@ -748,7 +493,7 @@ build.failed
 
 ### Tests
 
-```
+```text
 tests.started
 tests.passed
 tests.failed
@@ -756,7 +501,7 @@ tests.failed
 
 ### Docker
 
-```
+```text
 container.started
 container.stopped
 container.failed
@@ -764,38 +509,31 @@ container.failed
 
 ### Git
 
-```
+```text
 repository.changed
 branch.changed
 ```
 
 ### System
 
-```
+```text
 battery.low
 high.resource_usage
 ```
 
-Only implement events that can be detected reliably.
+Only generate events that can be reliably detected.
 
-Do not fake events.
+Never fake events.
 
 ---
 
-# 21. Actionable Notifications
-
-A notification should not simply say:
-
-```
-BUILD FAILED
-```
-
-It should allow actions.
+## 8.3 Actionable Notifications
 
 Example:
 
-```
+```text
 BUILD FAILED
+
 collector.py:182
 
 [OPEN]
@@ -803,19 +541,17 @@ collector.py:182
 [REBUILD]
 ```
 
-The user should be able to interact with these directly from the phone.
+The user must be able to execute the action directly from the phone.
 
 ---
 
-# 22. Developer Notification Feed
+## 8.4 Developer Event Feed
 
-Create a Tact notification/event feed.
+Create:
 
-Example:
-
-```
+```text
 TACT
-──────────────────────────
+────────────────────
 
 14:32  BUILD FAILED
        optilab-api
@@ -830,316 +566,308 @@ TACT
        branch changed
 ```
 
-Events should be filterable by:
+Support basic filtering:
 
 * severity
 * source
 * type
 
-But keep V0.2 UI simple.
+---
+
+# 9. V0.3 — DEVELOPER WORKSPACE
+
+## Goal
+
+Turn Tact into a persistent **developer dashboard**, rather than a collection of controls.
+
+The user should be able to see the health of their development environment at a glance.
 
 ---
 
-# 23. Context Detection
+## 9.1 Workspace Model
 
-Implement the first version of a context engine.
+Introduce:
 
-Initially, context may simply be:
-
-```
-active_application
-```
-
-Examples:
-
-```
-vscode
-chrome
-spotify
-terminal
-teams
+```text
+Workspace
+ ├── Layout
+ ├── Widgets
+ ├── Actions
+ ├── Integrations
+ └── Preferences
 ```
 
-Do not attempt advanced AI workflow inference yet.
+Example:
 
-The architecture should nevertheless allow richer context later.
+```text
+OPTILAB WORKSPACE
 
-Future context may include:
+Git
+  branch: feature/collector
+  ↑2 ↓0
+
+Build
+  ● passing
+
+Tests
+  124 / 124
+
+Docker
+  ● api
+  ● postgres
+  ● redis
+
+System
+  CPU 34%
+  RAM 61%
+```
+
+---
+
+## 9.2 Pages
+
+Allow multiple pages:
+
+```text
+Development
+Infrastructure
+Communication
+Media
+System
+```
+
+The user can switch between them.
+
+---
+
+## 9.3 Rich Widgets
+
+Expand widget library:
+
+### Controls
+
+* Button
+* Toggle
+* Slider
+* Dial
+* Dropdown
+
+### Information
+
+* Metric
+* Status
+* Progress
+* Notification
+* Text
+* Timer
+* Log
+* Graph
+
+Do not create unnecessary widgets.
+
+Prioritize developer use cases.
+
+---
+
+# 10. V0.4 — CONTEXT-AWARE TACT
+
+## Goal
+
+Tact should stop behaving like a static dashboard.
+
+It should understand:
+
+> **What is the developer doing right now?**
+
+---
+
+## 10.1 Context Engine
+
+Initially detect:
 
 * active application
 * active window
-* project
+* active project
+* Git repository
 * Git branch
-* running development services
-* meeting state
-* media state
-* development events
+* running services
+
+Initial applications:
+
+* VS Code
+* terminal
+* Chrome
+* Spotify
+* Teams
 
 ---
 
-# 24. Context-Aware Layouts
+## 10.2 Context-Aware Layouts
 
-Once active application detection works:
+Examples:
 
-```
+```text
 VS Code
    ↓
-development layout
+Development layout
+```
 
+```text
 Spotify
    ↓
-media layout
+Media layout
+```
 
+```text
 Teams
    ↓
-meeting layout
+Meeting layout
 ```
 
-However, V0.2 does not need to support every application.
+But do not merely clone existing "application profile" systems.
 
-Focus primarily on:
+The long-term goal is:
 
+```text
+Application
+    +
+Project
+    +
+Workflow state
+    +
+Events
+    ↓
+Context
+    ↓
+Relevant Tact interface
 ```
+
+---
+
+## 10.3 Development Workflow Detection
+
+Eventually detect:
+
+```text
 VS Code
-terminal
++
+Terminal
++
 Docker
++
 Git
++
+PostgreSQL
 ```
 
-The architecture should make adding other integrations straightforward.
+and infer:
+
+```text
+Development workflow
+```
+
+Tact can then show:
+
+```text
+DEVELOPMENT
+
+[RUN]
+[TEST]
+[BUILD]
+
+[DOCKER]
+[DATABASE]
+[GIT]
+
+Services:
+● postgres
+● redis
+● api
+```
+
+This is more valuable than simple application profiles.
 
 ---
 
-# 25. Persistence
+# 11. V0.5 — DEVELOPER INTEGRATION SUITE
 
-Use local persistence only.
+## Goal
 
-Suitable options:
+Make Tact useful across the actual developer workday.
 
-* SQLite
-* JSON configuration files
-
-Persist:
-
-* device pairing
-* user preferences
-* layouts
-* enabled integrations
-* notification settings
-
-Do NOT introduce cloud accounts or cloud synchronization yet.
+Add integrations progressively.
 
 ---
 
-# 26. Pairing and Security
+## Development
 
-For the MVP, the phone and laptop communicate over the local network.
-
-Do not assume the local network is trusted.
-
-Implement basic pairing.
-
-Recommended flow:
-
-1. Desktop agent starts.
-2. It generates a temporary pairing token.
-3. Desktop displays a QR code or pairing code.
-4. Phone scans/enters it.
-5. Phone establishes authenticated WebSocket connection.
-6. Agent stores the trusted device locally.
-7. Future connections require authentication.
-
-Do not expose unrestricted endpoints.
-
-Do not execute arbitrary shell commands received from the phone.
-
-Validate all action IDs.
-
-Validate all payloads using Pydantic or equivalent schemas.
+* VS Code
+* JetBrains IDEs
+* Git
+* GitHub
+* GitLab
+* Docker
+* terminal
+* SSH
+* PostgreSQL
+* other databases
+* CI/CD
 
 ---
 
-# 27. Non-Goals Until V0.2 Is Complete
+## Communication
 
-Do NOT implement:
+* Microsoft Teams
+* Slack
+* Discord
+* Zoom
+* Google Meet
 
-* native Android application
-* native iOS application
-* custom hardware
-* Raspberry Pi/ESP32 support
-* AI-generated workspaces
-* AI debugging
-* cloud synchronization
-* user accounts
-* marketplace
-* payments
-* social features
-* multi-user collaboration
-* enterprise administration
-* dozens of integrations
-* Kubernetes integration
-* complex plugin marketplace
-* microservice architecture
+Capabilities:
 
-These are future possibilities.
-
-The immediate goal is to prove that the core interaction is useful.
+* meeting state
+* mute
+* camera
+* screen sharing
+* meeting timer
+* notifications
 
 ---
 
-# 28. Product Quality Requirements
+## Productivity
 
-Tact should feel like a real application even in MVP form.
-
-Prioritize:
-
-### Responsiveness
-
-Button actions should feel immediate.
-
-### Reliability
-
-If the connection drops, the UI should clearly indicate:
-
-```
-Disconnected
-```
-
-and automatically attempt reconnection.
-
-### Graceful degradation
-
-If Docker is not installed:
-
-```
-Docker
-Not detected
-```
-
-Do not crash the application.
-
-If Git is unavailable:
-
-```
-Git
-Not available
-```
-
-Do not crash.
-
-### Error handling
-
-Errors should become useful events/logs rather than uncaught exceptions.
-
-### Logging
-
-The desktop agent should have structured logs.
-
-Use appropriate log levels:
-
-* DEBUG
-* INFO
-* WARNING
-* ERROR
+* Chrome
+* browser controls
+* Spotify
+* system controls
+* calendar
 
 ---
 
-# 29. Testing
+## AI
 
-Write tests for important domain logic.
+Support the developer's existing AI tools:
 
-At minimum:
+* ChatGPT
+* Claude
+* Gemini
+* coding assistants
 
-* action registry
-* action validation
-* WebSocket message schemas
-* event creation
-* context detection
-* telemetry collection
-* Git integration parsing
-* Docker integration parsing
-
-Do not attempt 100% coverage.
-
-Prioritize correctness of core functionality.
+Do not make Tact itself a generic chatbot.
 
 ---
 
-# 30. Development Method
+# 12. V0.6 — AI-GENERATED WORKSPACES
 
-Work incrementally.
+## Goal
 
-Before implementing a large feature:
+Reduce the configuration burden.
 
-1. Understand the existing architecture.
-2. Identify affected modules.
-3. Make the smallest coherent change.
-4. Run tests.
-5. Run lint/type checks where configured.
-6. Manually test the feature.
-7. Update documentation if behavior changed.
+The user should not need to manually construct their entire Tact environment.
 
-Do not rewrite working components unnecessarily.
+Tact detects the developer environment:
 
-Do not introduce dependencies without justification.
-
-Do not over-engineer for hypothetical future requirements.
-
----
-
-# 31. Product Design Principles
-
-Follow these principles throughout development.
-
-## Principle 1 — Information + Control
-
-Every useful Tact screen should ideally answer:
-
-> What is happening?
-
-and:
-
-> What can I do about it?
-
-## Principle 2 — Context over static macros
-
-The interface should eventually adapt to what the developer is doing.
-
-## Principle 3 — Declarative UI
-
-The desktop agent describes the interface; the client renders it.
-
-## Principle 4 — Events are first-class
-
-Important development events should be able to update the Tact interface immediately.
-
-## Principle 5 — Local-first
-
-Tact should work without cloud infrastructure.
-
-## Principle 6 — Developer-first
-
-Prioritize software development workflows over generic consumer remote-control features.
-
-## Principle 7 — Extensible
-
-Adding a new integration should not require rewriting the core.
-
----
-
-# 32. Future Vision — Do Not Implement Yet
-
-Keep the following architecture in mind, but do not implement it prematurely.
-
-## AI-generated workspace
-
-Eventually:
-
-User installs Tact.
-
-Tact detects:
-
-```
+```text
 VS Code
 Docker
 Git
@@ -1149,25 +877,86 @@ Teams
 ChatGPT
 ```
 
-Tact can generate:
+Then offers:
 
+> Generate a workspace?
+
+---
+
+## Example
+
+Tact generates:
+
+```text
+DEVELOPMENT
+
+[RUN]
+[TEST]
+[BUILD]
+[GIT]
+[DOCKER]
+[TERMINAL]
+
+Environment:
+
+CPU 34%
+RAM 61%
+
+Docker:
+● api
+● postgres
+● redis
 ```
-Development
+
+Additional pages:
+
+```text
 Communication
-Productivity
+Media
 AI
+System
 ```
 
-layouts automatically.
+---
 
-The AI should help with **configuration and workflow composition**, not merely provide a chatbot.
+## AI Design Principle
 
-## AI debugging
+AI is used primarily for:
 
-Eventually:
+* configuration
+* layout generation
+* workflow composition
+* integration selection
 
-```
+It should NOT simply add a chatbot panel.
+
+---
+
+## User modification
+
+The user should be able to say:
+
+> Put Docker and database controls on the first page.
+
+Tact updates the workspace.
+
+---
+
+# 13. V0.7 — AI DEVELOPER ASSISTANT
+
+## Goal
+
+Use Tact as an interface for developer debugging and development workflows.
+
+---
+
+## 13.1 Build Failure Assistant
+
+Example:
+
+```text
 BUILD FAILED
+
 collector.py:182
 
 [OPEN]
@@ -1176,11 +965,27 @@ collector.py:182
 [REBUILD]
 ```
 
-The AI could consume relevant error/context and route it to the user's configured AI provider.
+---
 
-## Provider-agnostic AI
+## 13.2 AI Debugging
 
-Potential future providers:
+When the user presses:
+
+```text
+DEBUG WITH AI
+```
+
+Tact gathers only relevant context, such as:
+
+* error
+* file/location
+* build output
+* test output
+* project metadata where explicitly authorized
+
+Then routes it to the user's configured AI provider.
+
+Possible providers:
 
 * OpenAI
 * Anthropic
@@ -1188,127 +993,1127 @@ Potential future providers:
 * local models
 * coding assistants
 
-Do not couple the entire product to one provider.
-
-## Physical Tact
-
-Eventually, the same Tact protocol could power a dedicated hardware control surface.
-
-But hardware is explicitly out of scope for the current development phase.
+Do not force users into one provider.
 
 ---
 
-# 33. Definition of Done — V0.1
+## 13.3 AI Actions
+
+Eventually:
+
+```text
+Explain
+Debug
+Suggest fix
+Open file
+Generate patch
+Rebuild
+Run tests
+```
+
+Any action that modifies code must require appropriate user confirmation.
+
+Do not silently modify code.
+
+---
+
+# 14. V0.8 — PLUGIN / INTEGRATION PLATFORM
+
+## Goal
+
+Allow developers and third parties to extend Tact.
+
+---
+
+## Plugin model
+
+A plugin should be able to define:
+
+```text
+Integration
+ ├── Actions
+ ├── Events
+ ├── Widgets
+ ├── Context providers
+ └── Layouts
+```
+
+Example:
+
+```text
+Docker Plugin
+
+Actions:
+ docker.restart
+ docker.logs
+ docker.start
+
+Events:
+ container.failed
+ container.stopped
+
+Widgets:
+ DockerStatus
+ ContainerList
+```
+
+---
+
+## Plugin principles
+
+Plugins should not require modification of Tact core.
+
+The core should provide stable APIs.
+
+Security boundaries must be considered carefully.
+
+Do not create a plugin marketplace until the plugin model is stable.
+
+---
+
+# 15. V0.9 — PUBLIC BETA / PRODUCTIZATION
+
+## Goal
+
+Move from developer project to usable public software.
+
+Focus on:
+
+* installation
+* onboarding
+* pairing
+* error handling
+* updates
+* documentation
+* polished UI
+* performance
+* reliability
+* telemetry/diagnostics with explicit consent
+
+---
+
+## 15.1 Installation
+
+The user should eventually be able to:
+
+```text
+Download Tact
+        ↓
+Install
+        ↓
+Start
+        ↓
+QR code
+        ↓
+Scan with phone
+        ↓
+Connected
+```
+
+Avoid requiring users to run Python commands in the commercial product.
+
+---
+
+## 15.2 Desktop Packaging
+
+Package the desktop agent into appropriate platform installers.
+
+Target platforms:
+
+* Windows
+* Linux
+* macOS
+
+Do not sacrifice architecture quality for cross-platform support too early.
+
+---
+
+## 15.3 Mobile
+
+The existing web client should first become a polished PWA.
+
+Only build native Android/iOS applications if the product has demonstrated a need for:
+
+* better background behavior
+* native notifications
+* haptics
+* Bluetooth
+* deeper OS integration
+* improved lifecycle handling
+
+Do not build native mobile apps simply because they are technically possible.
+
+---
+
+# 16. V1.0 — COMMERCIAL DEVELOPER PRODUCT
+
+## Goal
+
+Tact becomes a real consumer/prosumer software product.
+
+Potential positioning:
+
+> **Tact — The second interface for developers.**
+
+or:
+
+> **Tact — Your developer cockpit.**
+
+---
+
+# 17. MONETIZATION
+
+Do not optimize monetization before product-market validation.
+
+The likely model is:
+
+## Free
+
+Possible limits:
+
+* one computer
+* one mobile device
+* basic widgets
+* basic integrations
+* basic layouts
+
+The free version must be genuinely useful.
+
+---
+
+## Pro
+
+Potentially:
+
+* unlimited layouts
+* advanced widgets
+* advanced integrations
+* workflow detection
+* AI workspace generation
+* AI debugging
+* multiple computers
+* cloud sync
+* advanced notifications
+* custom themes
+* advanced automation
+
+Pricing should be determined through user validation.
+
+Do not assume a subscription is automatically correct.
+
+---
+
+# 18. V1.x — CLOUD / SYNC / ECOSYSTEM
+
+Only introduce cloud infrastructure once there is a demonstrated reason.
+
+Potential capabilities:
+
+* account
+* cloud layout sync
+* device synchronization
+* workspace backup
+* settings synchronization
+* optional AI configuration sync
+* marketplace account
+
+Tact must remain useful locally.
+
+Cloud should enhance the product, not become a requirement for basic functionality.
+
+---
+
+# 19. MARKETPLACE
+
+If the plugin ecosystem becomes strong enough, introduce:
+
+```text
+Tact Marketplace
+
+Developer
+ ├── VS Code Pro Pack
+ ├── Docker Pack
+ ├── Kubernetes Pack
+
+Creator
+ ├── OBS Pack
+ ├── Premiere Pack
+
+Productivity
+ ├── Slack
+ ├── Notion
+ └── Linear
+```
+
+Potential monetization:
+
+* free plugins
+* paid plugins
+* creator revenue share
+
+Do not implement this until the plugin ecosystem has actual demand.
+
+---
+
+# 20. V2.0 — PHYSICAL TACT
+
+Only after the software product has established demand.
+
+The original hardware concept can then become:
+
+> **A dedicated physical Tact control surface.**
+
+Potential hardware:
+
+* touchscreen
+* physical buttons
+* rotary encoders
+* USB-C
+* wireless
+* haptics
+* programmable controls
+
+The important point:
+
+> **The hardware should be another client of the Tact platform.**
+
+The same protocol should support:
+
+```text
+             TACT PLATFORM
+                    │
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+      Phone       Tablet      Hardware
+        │           │           │
+        └───────────┼───────────┘
+                    │
+               Tact Agent
+                    │
+                 Computer
+```
+
+Do not make hardware the foundation of the software architecture.
+
+---
+
+# 21. FUTURE HARDWARE CONCEPT
+
+The physical product should not merely be:
+
+> "Stream Deck with Tact branding."
+
+It should expose the same capabilities as the software:
+
+* developer telemetry
+* build status
+* Git state
+* Docker state
+* notifications
+* context-aware layouts
+* AI workflows
+* rich widgets
+
+Potential form:
+
+```text
+┌─────────────────────────────────────┐
+│ TACT                                │
+│                                     │
+│ Build ● Passing     Git ↑2          │
+│                                     │
+│ Docker                              │
+│ ● api  ● postgres  ✕ redis          │
+│                                     │
+│ [RUN] [TEST] [BUILD]                │
+│                                     │
+│ [GIT] [DOCKER] [DEBUG]              │
+│                                     │
+│ CPU 34%       RAM 61%               │
+└─────────────────────────────────────┘
+```
+
+Physical knobs/buttons can supplement the display.
+
+---
+
+# 22. CORE ARCHITECTURE
+
+The architecture must remain conceptually:
+
+```text
+                 TACT DESKTOP AGENT
+                         │
+       ┌─────────────────┼─────────────────┐
+       │                 │                 │
+       ▼                 ▼                 ▼
+ Context Engine     Telemetry Engine   Event Engine
+       │                 │                 │
+       └─────────────────┼─────────────────┘
+                         │
+                    State Manager
+                         │
+                    Layout Engine
+                         │
+                    Action Engine
+                         │
+                  Integration Layer
+                         │
+                         ▼
+                  Tact Protocol
+                         │
+              ┌──────────┼───────────┐
+              ▼          ▼           ▼
+           Mobile     Hardware    Future Clients
+           Client
+```
+
+The protocol should be treated as a major architectural boundary.
+
+---
+
+# 23. TECHNOLOGY STACK
+
+## Desktop Agent
+
+Use:
+
+* Python
+* FastAPI
+* WebSockets
+* Pydantic
+* psutil
+* subprocess / OS APIs
+* SQLite or JSON
+
+## Frontend
+
+Use:
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+
+## Future packaging
+
+Evaluate:
+
+* PyInstaller
+* Nuitka
+* native packaging
+* Tauri
+* other appropriate desktop packaging
+
+Do not introduce Tauri merely because it is popular.
+
+---
+
+# 24. DECLARATIVE UI PROTOCOL
+
+This is one of Tact's most important long-term architectural concepts.
+
+The desktop agent should describe the interface.
+
+Example:
+
+```json
+{
+  "type": "button",
+  "id": "vscode.run",
+  "label": "Run",
+  "action": "vscode.run"
+}
+```
+
+Metric:
+
+```json
+{
+  "type": "metric",
+  "id": "system.cpu",
+  "label": "CPU",
+  "value": 42,
+  "unit": "%"
+}
+```
+
+Status:
+
+```json
+{
+  "type": "status",
+  "id": "docker.postgres",
+  "label": "PostgreSQL",
+  "state": "healthy"
+}
+```
+
+Notification:
+
+```json
+{
+  "type": "notification",
+  "id": "build.failed",
+  "severity": "error",
+  "title": "Build Failed",
+  "message": "collector.py:182",
+  "actions": [
+    "open.error",
+    "debug.error",
+    "rebuild"
+  ]
+}
+```
+
+The client renders these.
+
+Do not hardcode every application into the frontend.
+
+---
+
+# 25. ACTION ARCHITECTURE
+
+Never expose arbitrary shell execution.
+
+Never create:
+
+```text
+POST /execute
+{
+    "command": "..."
+}
+```
+
+Instead use an allowlisted action registry.
+
+Examples:
+
+```text
+system.lock
+system.volume_up
+system.volume_down
+
+vscode.run
+vscode.build
+vscode.test
+
+git.status
+git.commit
+git.push
+
+docker.start
+docker.stop
+docker.restart
+docker.logs
+```
+
+Every action must:
+
+* be registered
+* be validated
+* have an explicit handler
+* have appropriate permissions
+* produce useful success/failure events
+
+---
+
+# 26. EVENT ARCHITECTURE
+
+Events are first-class objects.
+
+```text
+Integration
+      ↓
+ Event Bus
+      ↓
+ State Manager
+      ↓
+ ┌────┼───────────────┐
+ ↓    ↓               ↓
+UI   Notification   Logging
+```
+
+Events may eventually trigger:
+
+* UI updates
+* notifications
+* actions
+* automation
+* AI workflows
+
+But automation must be permissioned.
+
+---
+
+# 27. SECURITY PRINCIPLES
+
+Tact controls a computer.
+
+Therefore security is not optional.
+
+Requirements:
+
+* authenticated pairing
+* temporary pairing tokens
+* device trust
+* payload validation
+* action allowlisting
+* no arbitrary command execution
+* local network authentication
+* safe defaults
+* explicit permissions for dangerous operations
+* explicit confirmation for AI-generated code modifications
+
+Never assume LAN = trusted.
+
+---
+
+# 28. LOCAL-FIRST PRINCIPLE
+
+The basic Tact experience must work without:
+
+* cloud
+* account
+* external server
+* internet connection
+
+The phone and computer should communicate locally.
+
+Cloud services may later provide:
+
+* sync
+* marketplace
+* optional AI services
+* backup
+* analytics
+
+But local operation remains fundamental.
+
+---
+
+# 29. TESTING STRATEGY
+
+Test important domain logic.
+
+At minimum:
+
+* action registry
+* action validation
+* WebSocket schemas
+* event creation
+* context detection
+* telemetry
+* Git parsing
+* Docker parsing
+* layout serialization
+* notification handling
+
+Do not chase 100% coverage.
+
+Prioritize correctness of the core product.
+
+---
+
+# 30. UX PRINCIPLES
+
+Tact should feel:
+
+* fast
+* quiet
+* information-dense
+* useful
+* configurable
+* reliable
+
+Avoid:
+
+* excessive animations
+* unnecessary gamification
+* giant dashboards full of irrelevant information
+* decorative UI that reduces information density
+* requiring users to configure everything manually
+
+The phone should be something the developer can glance at and immediately understand.
+
+---
+
+# 31. PRODUCT DESIGN PRINCIPLES
+
+### Information + Control
+
+Show state and provide actions.
+
+### Context over static macros
+
+The interface should eventually adapt to what the developer is doing.
+
+### Declarative UI
+
+The agent describes the interface; clients render it.
+
+### Events are first-class
+
+Important events should propagate immediately.
+
+### Developer-first
+
+Prioritize development workflows.
+
+### Local-first
+
+Basic functionality should not depend on cloud services.
+
+### Extensible
+
+New integrations should not require rewriting the core.
+
+### Progressive complexity
+
+Start simple.
+
+Add sophistication only when user behavior demonstrates the need.
+
+---
+
+# 32. NON-GOALS FOR EARLY DEVELOPMENT
+
+Before V0.2 is stable, do NOT implement:
+
+* native Android
+* native iOS
+* hardware
+* Raspberry Pi
+* ESP32
+* AI workspaces
+* AI debugging
+* cloud sync
+* accounts
+* payments
+* marketplace
+* social features
+* enterprise administration
+* dozens of integrations
+* Kubernetes
+* complex plugin marketplace
+* microservices
+
+Before V0.5, do not prematurely build:
+
+* full cloud platform
+* marketplace
+* complex AI infrastructure
+* hardware
+* enterprise product
+
+The product must earn complexity through demonstrated usage.
+
+---
+
+# 33. DEVELOPMENT PROCESS FOR THE CODING AGENT
+
+At the beginning of every phase:
+
+1. Inspect the current repository.
+2. Understand the existing architecture.
+3. Review the previous phase's completion status.
+4. Identify the smallest coherent implementation.
+5. Implement a vertical slice.
+6. Run tests.
+7. Run lint/type checks.
+8. Manually test the feature.
+9. Update documentation.
+10. Only then continue.
+
+Do not rewrite working architecture without a demonstrated reason.
+
+Do not introduce dependencies without justification.
+
+Do not create abstractions purely for hypothetical future use.
+
+However, preserve the architectural boundaries necessary for future phases.
+
+---
+
+# 34. PHASE GATES
+
+The coding agent must not automatically jump ahead.
+
+## Gate 0 → V0.1
+
+Must demonstrate:
+
+```text
+Phone
+ ↓
+WebSocket
+ ↓
+Tact Agent
+ ↓
+Action
+ ↓
+Laptop
+```
+
+## V0.1 → V0.2
+
+Must demonstrate:
+
+* working phone client
+* reliable connection
+* safe actions
+* system telemetry
+* VS Code
+* Git
+* Docker
+* declarative UI
+* persistence
+* pairing
+
+## V0.2 → V0.3
+
+Must demonstrate:
+
+* central event bus
+* build events
+* test events
+* Docker events
+* Git events
+* actionable notifications
+* event feed
+
+## V0.3 → V0.4
+
+Must demonstrate:
+
+* useful dashboard
+* multiple layouts/pages
+* rich widgets
+* persistent workspace
+
+## V0.4 → V0.5
+
+Must demonstrate:
+
+* reliable context detection
+* context-aware layouts
+* developer workflow detection
+
+## V0.5 → V0.6
+
+Must demonstrate:
+
+* enough integrations to understand a real developer workflow
+* users actually configuring/customizing Tact
+* clear evidence that configuration complexity is a problem
+
+Only then introduce AI workspace generation.
+
+## V0.6 → V0.7
+
+Must demonstrate:
+
+* generated layouts are useful
+* users modify generated layouts
+* AI reduces configuration effort
+
+Only then expand AI into debugging.
+
+## V0.7 → V0.8
+
+Must demonstrate:
+
+* meaningful AI developer workflows
+* stable integration interfaces
+* demand for additional integrations
+
+Only then formalize the plugin platform.
+
+## V0.8 → V0.9
+
+Must demonstrate:
+
+* stable plugin model
+* reliable onboarding
+* reliable core application
+
+Only then prepare public beta.
+
+## V0.9 → V1.0
+
+Must demonstrate:
+
+* stable public software
+* retention
+* repeated usage
+* users completing real workflows
+* evidence of willingness to pay
+
+Only then optimize monetization aggressively.
+
+## V1.x → Hardware
+
+Do not build hardware merely because the original idea included hardware.
+
+Build hardware only if:
+
+* users repeatedly request physical controls
+* software usage demonstrates which controls matter
+* a viable hardware BOM exists
+* there is a clear reason software alone is insufficient
+
+---
+
+# 35. V0.1 DEFINITION OF DONE
 
 V0.1 is complete when:
 
-1. The Tact desktop agent runs locally.
-2. A phone can connect over LAN.
-3. The phone renders a responsive Tact interface.
-4. WebSocket communication works reliably.
-5. The phone can execute safe registered actions.
+1. Desktop agent runs locally.
+2. Phone connects over LAN.
+3. Responsive Tact interface renders.
+4. WebSocket communication works.
+5. Safe registered actions work.
 6. System telemetry is displayed.
 7. VS Code integration provides useful controls.
 8. Git state is displayed.
-9. Docker state is displayed when Docker exists.
-10. Layouts are represented declaratively.
-11. The connection automatically reconnects.
+9. Docker state is displayed when available.
+10. Layouts are declarative.
+11. Connection reconnects automatically.
 12. Basic pairing/authentication exists.
 13. Important code paths have tests.
-14. README explains how to install and run the MVP.
-15. The developer can realistically use Tact during a coding session.
+14. README explains setup.
+15. Tact is realistically usable during coding.
 
 ---
 
-# 34. Definition of Done — V0.2
+# 36. V0.2 DEFINITION OF DONE
 
 V0.2 is complete when:
 
-1. A central event bus exists.
+1. Central event bus exists.
 2. Build events are detected.
 3. Test events are detected.
-4. Docker state changes generate events.
-5. Git state changes generate events.
-6. Events reach the mobile client in real time.
-7. Tact displays a developer notification/event feed.
+4. Docker changes generate events.
+5. Git changes generate events.
+6. Events reach mobile in real time.
+7. Notification/event feed exists.
 8. Notifications can contain actions.
-9. Build failures can expose actions such as:
-
-   * Open
-   * Debug
-   * Rebuild
-10. Context detection can identify the active development application.
+9. Build failures support Open/Debug/Rebuild actions.
+10. Context detection identifies active development application.
 11. Layouts can respond to context.
-12. Connection/security/error handling is robust.
-13. The system remains local-first.
-14. The codebase remains modular enough to add future integrations.
+12. Security/error handling is robust.
+13. System remains local-first.
+14. Architecture remains modular.
 
 ---
 
-# 35. How You Should Work as the Coding Agent
+# 37. V0.3 DEFINITION OF DONE
 
-Do not simply start writing hundreds of files.
+V0.3 is complete when:
 
-First inspect the repository and determine its current state.
-
-Then:
-
-1. Establish the project structure.
-2. Create the minimal desktop agent.
-3. Create the minimal React client.
-4. Establish WebSocket communication.
-5. Implement one end-to-end action.
-6. Implement the declarative UI protocol.
-7. Expand to telemetry and integrations.
-8. Implement V0.1.
-9. Test V0.1.
-10. Only then begin V0.2.
-
-At each stage, favor a working vertical slice over isolated infrastructure.
-
-When making architectural decisions, explain the reasoning briefly in code comments or documentation where appropriate.
-
-Do not ask for permission for every small implementation decision.
-
-Make reasonable engineering decisions independently.
-
-However, if a requirement is genuinely ambiguous and could materially alter the architecture or product behavior, stop and ask for clarification rather than inventing a major feature.
+1. Workspace abstraction exists.
+2. Multiple pages/layouts exist.
+3. Rich widgets exist.
+4. Developer dashboard is useful.
+5. Workspace state persists.
+6. Developer can customize layouts.
+7. Dashboard combines information and actions coherently.
 
 ---
 
-# 36. First Task
+# 38. V0.4 DEFINITION OF DONE
 
-Your immediate task is NOT to implement the entire roadmap.
+V0.4 is complete when:
 
-First:
+1. Active application detection is reliable.
+2. Context engine exists.
+3. Context-aware layouts work.
+4. Development workflow state can be detected.
+5. Tact automatically surfaces relevant controls.
+6. User can override automatic context selection.
 
-1. Inspect the repository.
-2. Determine what already exists.
-3. Create or refine the architecture for V0.1/V0.2.
-4. Identify missing pieces.
-5. Create a concise implementation plan.
-6. Then begin implementing the first vertical slice:
+---
 
-   ```
-   Desktop Agent
-         ↓
-   WebSocket
-         ↓
-   Mobile Web Client
-         ↓
-   Button
-         ↓
-   Safe laptop action
-   ```
+# 39. V0.5 DEFINITION OF DONE
 
-The first successful demonstration should be:
+V0.5 is complete when:
+
+1. Core developer integrations are stable.
+2. Communication integrations work.
+3. Media integration works.
+4. AI-tool integration foundations exist.
+5. Developer can use Tact across a significant portion of their workday.
+6. Integration architecture is stable enough for external extension.
+
+---
+
+# 40. V0.6 DEFINITION OF DONE
+
+V0.6 is complete when:
+
+1. Tact can inspect the user's authorized environment.
+2. AI can generate a workspace.
+3. Generated workspace uses valid Tact UI primitives.
+4. Generated actions are allowlisted.
+5. User can edit generated workspace.
+6. AI generation does not require a specific AI provider.
+7. Generated layouts are actually useful.
+
+---
+
+# 41. V0.7 DEFINITION OF DONE
+
+V0.7 is complete when:
+
+1. Build/test failures can invoke AI workflows.
+2. Relevant context can be gathered safely.
+3. User can request explanations.
+4. User can request debugging assistance.
+5. AI-generated modifications require confirmation.
+6. Multiple AI providers can be supported.
+7. AI remains optional.
+
+---
+
+# 42. V0.8 DEFINITION OF DONE
+
+V0.8 is complete when:
+
+1. Plugin API exists.
+2. Plugins can define actions.
+3. Plugins can define events.
+4. Plugins can define widgets.
+5. Plugins can provide layouts.
+6. Plugins can provide context.
+7. Plugins cannot arbitrarily bypass security boundaries.
+8. Core does not need modification for normal integrations.
+
+---
+
+# 43. V0.9 DEFINITION OF DONE
+
+V0.9 is complete when:
+
+1. Installation is simple.
+2. Desktop packaging works.
+3. Pairing is polished.
+4. Onboarding is polished.
+5. Error handling is understandable.
+6. Documentation is complete.
+7. Performance is acceptable.
+8. Public beta users can use Tact without developer intervention.
+
+---
+
+# 44. V1.0 DEFINITION OF DONE
+
+V1.0 requires:
+
+* stable desktop software
+* stable mobile client/PWA
+* reliable pairing
+* core developer integrations
+* context-aware workflows
+* notifications
+* workspace system
+* AI workspace generation
+* optional AI debugging
+* plugin architecture
+* polished onboarding
+* documentation
+* privacy/security model
+* clear free/pro product boundaries
+
+Most importantly:
+
+> **Real developers must repeatedly choose to use Tact because it makes their work easier.**
+
+---
+
+# 45. FUTURE HARDWARE
+
+Hardware is a future client, not the foundation.
+
+Potential architecture:
+
+```text
+                    TACT PLATFORM
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+       Phone           Tablet        Hardware
+          │              │              │
+          └──────────────┼──────────────┘
+                         │
+                    Tact Protocol
+                         │
+                    Tact Agent
+                         │
+                      Computer
+```
+
+The same declarative UI and action protocol should ideally support all clients.
+
+---
+
+# 46. FINAL DEVELOPMENT INSTRUCTION
+
+You are not being asked to build the entire vision immediately.
+
+You are being asked to build the product **phase by phase**.
+
+At any given moment:
+
+> **Implement only the current phase.**
+
+Preserve architecture that enables later phases, but do not implement future features prematurely.
+
+The current priority is always:
+
+```text
+Working software
+        >
+Architectural elegance
+        >
+Future-proofing
+        >
+Feature count
+```
+
+A small working feature is better than a large unfinished subsystem.
+
+The first objective remains:
 
 > **Open Tact on a phone → see the Tact interface → press a button → observe the laptop respond immediately.**
 
-Everything else should build on this foundation.
+Then progressively evolve Tact from:
 
-Do not over-engineer the MVP.
-Do not build features outside the V0.1/V0.2 scope.
-Keep Tact developer-focused.
-Keep the architecture extensible.
-Prioritize making the product genuinely useful.
+```text
+Remote Control
+      ↓
+Developer Control Surface
+      ↓
+Developer Event System
+      ↓
+Developer Dashboard
+      ↓
+Context-Aware Workspace
+      ↓
+Developer Integration Platform
+      ↓
+AI-Generated Workspace
+      ↓
+AI Developer Companion
+      ↓
+Plugin Ecosystem
+      ↓
+Commercial Product
+      ↓
+Optional Physical Tact
+```
+
+This progression is the product strategy.
+
+Do not skip the validation gates.
+Do not build complexity without demonstrated demand.
+Do not lose the developer-first identity.
