@@ -3,92 +3,350 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Tact Minimal Client</title>
+    <title>Tact Developer Control Surface</title>
     <style>
-      body { font-family: Arial, sans-serif; padding: 16px; }
-      .metric { margin: 8px 0; }
-      .section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd; }
-      .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-      button { padding: 12px 16px; font-size: 16px; }
-      pre { white-space: pre-wrap; word-break: break-word; background: #f6f6f6; padding: 12px; border-radius: 6px; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: #f5f5f5;
+        color: #333;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      nav {
+        background: #2d2d2d;
+        color: #fff;
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+
+      nav h1 { font-size: 18px; font-weight: 600; }
+      nav .status { font-size: 12px; opacity: 0.8; }
+
+      .container { 
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #fff;
+        border-bottom: 1px solid #e0e0e0;
+        overflow-x: auto;
+      }
+
+      .tab-btn {
+        padding: 8px 16px;
+        border: none;
+        background: #f0f0f0;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+        white-space: nowrap;
+      }
+
+      .tab-btn.active {
+        background: #2d2d2d;
+        color: #fff;
+      }
+
+      .tab-btn:hover {
+        background: #e0e0e0;
+      }
+
+      .tab-btn.active:hover {
+        background: #1a1a1a;
+      }
+
+      .content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+
+      .card h2 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .metric-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .metric {
+        background: #f9f9f9;
+        padding: 12px;
+        border-radius: 4px;
+      }
+
+      .metric-label {
+        font-size: 12px;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .metric-value {
+        font-size: 18px;
+        font-weight: 600;
+        margin-top: 4px;
+      }
+
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      button {
+        flex: 1;
+        min-width: 120px;
+        padding: 12px 16px;
+        border: none;
+        background: #2d2d2d;
+        color: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      button:hover {
+        background: #1a1a1a;
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      .event-log {
+        background: #f9f9f9;
+        padding: 12px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 2px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .status-badge.ok { background: #d4edda; color: #155724; }
+      .status-badge.error { background: #f8d7da; color: #721c24; }
+      .status-badge.info { background: #d1ecf1; color: #0c5460; }
+
+      .last-result {
+        padding: 12px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        font-size: 12px;
+        margin-top: 12px;
+        font-family: monospace;
+      }
+
+      .connection-status {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+        background: #ccc;
+      }
+
+      .connection-status.connected {
+        background: #28a745;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
     </style>
   </head>
   <body>
-    <h1>Tact — Minimal Client</h1>
-    <div id="status">Connecting…</div>
-    <div class="metric">CPU: <span id="cpu">-</span>%</div>
-    <div class="metric">Memory: <span id="memory">-</span>%</div>
-    <div class="metric">Workspace: <span id="workspace">-</span></div>
-    <div class="metric">Git: <span id="gitStatus">-</span></div>
-    <div class="metric">VS Code: <span id="vscodeStatus">-</span></div>
+    <nav>
+      <div>
+        <h1>⚙️ Tact</h1>
+      </div>
+      <div class="status">
+        <span class="connection-status" id="connStatus"></span>
+        <span id="statusText">Connecting…</span>
+      </div>
+    </nav>
 
-    <div class="section">
-      <div>System</div>
-      <div class="buttons">
-        <button id="openBtn">Open example.com</button>
+    <div class="container">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="system">System</button>
+        <button class="tab-btn" data-tab="vscode">VS Code</button>
+        <button class="tab-btn" data-tab="git">Git</button>
+        <button class="tab-btn" data-tab="log">Events</button>
+      </div>
+
+      <div class="content">
+        <!-- System Tab -->
+        <div id="system-tab" class="tab-panel active">
+          <div class="card">
+            <h2>System Status</h2>
+            <div class="metric-group">
+              <div class="metric">
+                <div class="metric-label">CPU</div>
+                <div class="metric-value"><span id="cpu">-</span>%</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Memory</div>
+                <div class="metric-value"><span id="memory">-</span>%</div>
+              </div>
+            </div>
+            <div class="metric-group">
+              <div class="metric">
+                <div class="metric-label">Workspace</div>
+                <div class="metric-value" style="font-size: 12px;"><span id="workspace">-</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Quick Actions</h2>
+            <div class="buttons">
+              <button onclick="window.sendAction('system.open_url', { url: 'https://example.com' })">
+                Open Example
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- VS Code Tab -->
+        <div id="vscode-tab" class="tab-panel">
+          <div class="card">
+            <h2>
+              VS Code
+              <span class="status-badge" id="vscodeState">Checking…</span>
+            </h2>
+            <div class="metric-group">
+              <div class="metric">
+                <div class="metric-label">Status</div>
+                <div class="metric-value" style="font-size: 12px;" id="vscodeStatus">-</div>
+              </div>
+            </div>
+            <div class="buttons">
+              <button onclick="window.sendAction('vscode.status')">Refresh</button>
+              <button onclick="window.sendAction('vscode.open_workspace')">Open Workspace</button>
+            </div>
+            <div id="vscodeResult" class="last-result" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- Git Tab -->
+        <div id="git-tab" class="tab-panel">
+          <div class="card">
+            <h2>
+              Git
+              <span class="status-badge" id="gitState">-</span>
+            </h2>
+            <div class="metric-group">
+              <div class="metric">
+                <div class="metric-label">Branch</div>
+                <div class="metric-value" style="font-size: 12px;" id="gitBranch">-</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Status</div>
+                <div class="metric-value" style="font-size: 12px;" id="gitClean">-</div>
+              </div>
+            </div>
+            <div class="buttons">
+              <button onclick="window.sendAction('git.status')">Refresh</button>
+              <button onclick="window.sendAction('git.pull')">Pull</button>
+              <button onclick="window.sendAction('git.push')">Push</button>
+              <button onclick="window.gitCommit()">Commit</button>
+            </div>
+            <div id="gitResult" class="last-result" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- Events Log Tab -->
+        <div id="log-tab" class="tab-panel">
+          <div class="card">
+            <h2>Event Log</h2>
+            <div class="event-log" id="eventLog">Waiting for events…</div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <div class="section">
-      <div>VS Code</div>
-      <div class="buttons">
-        <button id="vscodeOpenBtn">Open Workspace</button>
-        <button id="vscodeStatusBtn">Refresh Status</button>
-      </div>
-    </div>
-
-    <div class="section">
-      <div>Git</div>
-      <div class="buttons">
-        <button id="gitStatusBtn">Refresh Status</button>
-        <button id="gitPullBtn">Pull</button>
-        <button id="gitPushBtn">Push</button>
-        <button id="gitCommitBtn">Commit</button>
-      </div>
-    </div>
-
-    <div id="actionStatus" style="margin-top:12px;color:green"></div>
-    <pre id="actionLog"></pre>
 
     <script>
-      const statusEl = document.getElementById('status')
+      const connStatus = document.getElementById('connStatus')
+      const statusText = document.getElementById('statusText')
       const cpuEl = document.getElementById('cpu')
       const memEl = document.getElementById('memory')
       const workspaceEl = document.getElementById('workspace')
-      const gitStatusEl = document.getElementById('gitStatus')
+      const gitBranchEl = document.getElementById('gitBranch')
+      const gitCleanEl = document.getElementById('gitClean')
+      const gitStateEl = document.getElementById('gitState')
       const vscodeStatusEl = document.getElementById('vscodeStatus')
-      const openBtn = document.getElementById('openBtn')
-      const vscodeOpenBtn = document.getElementById('vscodeOpenBtn')
-      const vscodeStatusBtn = document.getElementById('vscodeStatusBtn')
-      const gitStatusBtn = document.getElementById('gitStatusBtn')
-      const gitPullBtn = document.getElementById('gitPullBtn')
-      const gitPushBtn = document.getElementById('gitPushBtn')
-      const gitCommitBtn = document.getElementById('gitCommitBtn')
-      const actionStatusEl = document.getElementById('actionStatus')
-      const actionLogEl = document.getElementById('actionLog')
+      const vscodeStateEl = document.getElementById('vscodeState')
+      const eventLogEl = document.getElementById('eventLog')
+      const vscodeResultEl = document.getElementById('vscodeResult')
+      const gitResultEl = document.getElementById('gitResult')
 
       let currentWorkspace = null
-
-      function appendLog(line) {
-        const ts = new Date().toLocaleTimeString()
-        actionLogEl.textContent = `[${ts}] ${line}\n` + actionLogEl.textContent
-      }
-
-      function sendAction(actionId, payload = {}) {
-        if (ws.readyState !== WebSocket.OPEN) {
-          appendLog(`socket not open: ${actionId}`)
-          return
-        }
-        ws.send(JSON.stringify({ type: 'action', action_id: actionId, payload }))
-        appendLog(`sent ${actionId} ${JSON.stringify(payload)}`)
-      }
+      let logs = []
 
       const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
       const wsUrl = `${scheme}://${location.host}/ws`
       const ws = new WebSocket(wsUrl)
 
       ws.addEventListener('open', () => {
-        statusEl.textContent = 'Connected'
+        connStatus.classList.add('connected')
+        statusText.textContent = 'Connected'
       })
 
       ws.addEventListener('message', (ev) => {
@@ -96,72 +354,83 @@
           const msg = JSON.parse(ev.data)
           if ((msg.type === 'init' || msg.type === 'telemetry') && msg.payload) {
             const system = msg.payload.system || msg.payload
-            cpuEl.textContent = system.cpu ?? '-'
-            memEl.textContent = system.memory ?? '-'
+            cpuEl.textContent = Math.round(system.cpu ?? 0)
+            memEl.textContent = Math.round(system.memory ?? 0)
 
             const workspace = msg.payload.workspace || {}
             currentWorkspace = workspace.git_root || workspace.cwd || currentWorkspace
-            workspaceEl.textContent = currentWorkspace || '-'
+            workspaceEl.textContent = currentWorkspace ? currentWorkspace.split('/').pop() : '-'
 
             const git = workspace.git || {}
             if (git && git.available) {
-              const ahead = git.ahead != null ? ` ↑${git.ahead}` : ''
-              const behind = git.behind != null ? ` ↓${git.behind}` : ''
-              gitStatusEl.textContent = `${git.branch || '(no branch)'}${ahead}${behind}${git.clean ? ' clean' : ` dirty (${git.changed_files})`}`
-            } else {
-              gitStatusEl.textContent = 'not available'
+              gitBranchEl.textContent = git.branch || '(no branch)'
+              gitCleanEl.textContent = git.clean ? 'clean' : `dirty (${git.changed_files || 0})`
+              gitStateEl.textContent = git.clean ? 'CLEAN' : 'DIRTY'
+              gitStateEl.className = 'status-badge ' + (git.clean ? 'ok' : 'error')
             }
 
             const vscode = workspace.vscode || {}
-            vscodeStatusEl.textContent = `${vscode.available ? 'available' : 'not available'}${vscode.running ? ' running' : ''}${vscode.command ? ` (${vscode.command})` : ''}`
+            vscodeStatusEl.textContent = `${vscode.available ? 'available' : 'not available'}${vscode.running ? ' • running' : ''}`
+            vscodeStateEl.textContent = vscode.running ? 'RUNNING' : 'STOPPED'
+            vscodeStateEl.className = 'status-badge ' + (vscode.running ? 'ok' : 'info')
+          } else if (msg.type === 'event' && msg.payload) {
+            const evt = msg.payload
+            logEvent(`[${evt.source}] ${evt.title}: ${evt.message}`)
           } else if (msg.type === 'action_result') {
-            console.log('Action result', msg)
-            if (msg.result && msg.result.ok) {
-              actionStatusEl.textContent = `Action ${msg.action_id} OK: ${JSON.stringify(msg.result.result)}`
-              actionStatusEl.style.color = 'green'
-              appendLog(`ok ${msg.action_id} ${JSON.stringify(msg.result.result)}`)
-            } else {
-              actionStatusEl.textContent = `Action ${msg.action_id} ERROR: ${JSON.stringify(msg.result)}`
-              actionStatusEl.style.color = 'red'
-              appendLog(`error ${msg.action_id} ${JSON.stringify(msg.result)}`)
+            const resultMsg = msg.result.ok ? `✓ ${msg.action_id}` : `✗ ${msg.action_id}: ${msg.result.error || 'unknown error'}`
+            logEvent(resultMsg)
+            
+            if (msg.action_id === 'vscode.status' || msg.action_id === 'vscode.open_workspace') {
+              vscodeResultEl.textContent = JSON.stringify(msg.result, null, 2)
+              vscodeResultEl.style.display = 'block'
+            } else if (msg.action_id.startsWith('git.')) {
+              gitResultEl.textContent = JSON.stringify(msg.result, null, 2)
+              gitResultEl.style.display = 'block'
             }
           }
-        } catch (e) { console.error(e) }
+        } catch (e) { 
+          console.error(e) 
+        }
       })
 
-      ws.addEventListener('close', () => { statusEl.textContent = 'Disconnected' })
-
-      openBtn.addEventListener('click', () => {
-        sendAction('system.open_url', { url: 'https://example.com' })
+      ws.addEventListener('close', () => {
+        connStatus.classList.remove('connected')
+        statusText.textContent = 'Disconnected'
       })
 
-      vscodeOpenBtn.addEventListener('click', () => {
-        sendAction('vscode.open_workspace', { path: currentWorkspace || undefined })
-      })
+      function logEvent(line) {
+        const ts = new Date().toLocaleTimeString()
+        logs.unshift(`[${ts}] ${line}`)
+        if (logs.length > 100) logs.pop()
+        eventLogEl.textContent = logs.join('\n')
+      }
 
-      vscodeStatusBtn.addEventListener('click', () => {
-        sendAction('vscode.status', { path: currentWorkspace || undefined })
-      })
-
-      gitStatusBtn.addEventListener('click', () => {
-        sendAction('git.status', { path: currentWorkspace || undefined })
-      })
-
-      gitPullBtn.addEventListener('click', () => {
-        sendAction('git.pull', { path: currentWorkspace || undefined })
-      })
-
-      gitPushBtn.addEventListener('click', () => {
-        sendAction('git.push', { path: currentWorkspace || undefined })
-      })
-
-      gitCommitBtn.addEventListener('click', () => {
-        const message = prompt('Commit message')
-        if (!message) {
-          appendLog('commit cancelled')
+      window.sendAction = function(actionId, payload = {}) {
+        if (ws.readyState !== WebSocket.OPEN) {
+          logEvent(`socket not open: ${actionId}`)
           return
         }
-        sendAction('git.commit', { path: currentWorkspace || undefined, message })
+        logEvent(`→ ${actionId}`)
+        ws.send(JSON.stringify({ type: 'action', action_id: actionId, payload }))
+      }
+
+      window.gitCommit = function() {
+        const message = prompt('Commit message:')
+        if (!message) {
+          logEvent('commit cancelled')
+          return
+        }
+        window.sendAction('git.commit', { path: currentWorkspace, message })
+      }
+
+      // Tab switching
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+          btn.classList.add('active')
+          document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active')
+        })
       })
     </script>
   </body>

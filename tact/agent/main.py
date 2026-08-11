@@ -9,11 +9,14 @@ from fastapi.staticfiles import StaticFiles
 
 from .ws_manager import ConnectionManager
 from .actions import ActionRegistry
+from .monitoring import StateMonitor
+from .events import Event
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 manager = ConnectionManager()
 actions = ActionRegistry()
+monitor = StateMonitor(actions.event_bus)
 
 app.mount("/client", StaticFiles(directory="client"), name="client")
 
@@ -45,6 +48,7 @@ def snapshot_state() -> dict[str, Any]:
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     telemetry_task = None
+    monitor_task = None
     try:
         # send initial system snapshot
         await websocket.send_json({"type": "init", "payload": snapshot_state()})
@@ -54,7 +58,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 await asyncio.sleep(5)
                 await ws.send_json({"type": "telemetry", "payload": snapshot_state()})
 
+        def on_event(event: Event):
+            if websocket in manager.active_connections:
+                try:
+                    asyncio.create_task(websocket.send_json({"type": "event", "payload": event.to_json()}))
+                except Exception:
+                    pass
+
+        actions.event_bus.subscribe("git.state_changed", on_event)
+        actions.event_bus.subscribe("vscode.state_changed", on_event)
+
         telemetry_task = asyncio.create_task(telemetry_loop(websocket))
+        if not any(asyncio.all_tasks() for t in asyncio.all_tasks() if "monitor_loop" in str(t)):
+            monitor_task = asyncio.create_task(monitor.monitor_loop(interval=10.0))
 
         while True:
             data = await websocket.receive_json()

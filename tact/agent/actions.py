@@ -8,6 +8,7 @@ import shutil
 
 from .integrations.git import GitIntegration
 from .integrations.vscode import VSCodeIntegration
+from .events import EventBus
 
 
 class OpenUrlPayload(BaseModel):
@@ -20,6 +21,7 @@ class ActionRegistry:
     def __init__(self):
         self.git = GitIntegration()
         self.vscode = VSCodeIntegration()
+        self.event_bus = EventBus()
         self._registry = {
             "system.open_url": self._open_url,
             "vscode.open_workspace": self._open_workspace,
@@ -94,6 +96,9 @@ class ActionRegistry:
 
     def _git_push(self, payload: dict):
         path = payload.get("path") if isinstance(payload, dict) else None
+        # Guardrail: check if there are commits to push
+        if not self.git.has_unpushed_commits(path):
+            return {"ok": False, "error": "nothing_to_push"}
         return self.git.push(path)
 
     def _git_commit(self, payload: dict):
@@ -101,4 +106,7 @@ class ActionRegistry:
         if not message.strip():
             return {"ok": False, "error": "commit_message_required"}
         path = payload.get("path") if isinstance(payload, dict) else None
+        # Guardrail: ensure there are changes to commit
+        if not self.git.is_dirty(path):
+            return {"ok": False, "error": "nothing_to_commit", "message": "working directory is clean"}
         return self.git.commit(message, path)

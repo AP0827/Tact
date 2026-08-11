@@ -85,6 +85,22 @@ class GitIntegration:
     def commit(self, message: str, start_path: str | Path | None = None) -> dict[str, Any]:
         return self._run_git_action(start_path, ["commit", "-am", message])
 
+    def is_dirty(self, start_path: str | Path | None = None) -> bool:
+        """Check if the repository has uncommitted changes."""
+        root = self.discover_root(start_path)
+        if root is None:
+            return False
+        status = self.status(root)
+        return not status.get("clean", False)
+
+    def has_unpushed_commits(self, start_path: str | Path | None = None) -> bool:
+        """Check if there are commits ahead of upstream."""
+        root = self.discover_root(start_path)
+        if root is None:
+            return False
+        status = self.status(root)
+        return (status.get("ahead") or 0) > 0
+
     def _run_git_action(self, start_path: str | Path | None, args: list[str]) -> dict[str, Any]:
         root = self.discover_root(start_path)
         if root is None:
