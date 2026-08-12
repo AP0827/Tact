@@ -1,4 +1,3 @@
-import json
 import secrets
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
@@ -29,37 +28,27 @@ class PendingPairing:
 
 
 class Config:
-    """Local-first configuration and pairing persistence."""
+    """In-memory configuration and pairing state.
+
+    Pairings, pending requests, and tokens live only for the lifetime of the
+    server process. Restarting the server forgets all previously paired
+    devices, which is the desired behaviour for a transient dev-tool pairing.
+    """
 
     def __init__(self, config_path: Optional[Path] = None):
         self.config_path = config_path or CONFIG_FILE
         self._data = self._load()
 
     def _load(self) -> dict:
-        if not self.config_path.exists():
-            return {
-                "paired_devices": [],
-                "pending_pairings": [],
-                "pairing_token": None,
-                "pairing_token_expires": None,
-            }
-        try:
-            text = self.config_path.read_text(encoding="utf-8")
-            return json.loads(text)
-        except Exception:
-            return {
-                "paired_devices": [],
-                "pending_pairings": [],
-                "pairing_token": None,
-                "pairing_token_expires": None,
-            }
+        return {
+            "paired_devices": [],
+            "pending_pairings": [],
+            "pairing_token": None,
+            "pairing_token_expires": None,
+        }
 
     def _save(self) -> None:
-        try:
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            self.config_path.write_text(json.dumps(self._data, indent=2), encoding="utf-8")
-        except Exception:
-            pass
+        pass
 
     def generate_pairing_token(self, ttl_seconds: int = 300) -> str:
         token = f"{secrets.randbelow(1000000):06d}"

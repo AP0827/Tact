@@ -116,6 +116,32 @@ class SystemIntegration:
         )
 
     def screenshot(self) -> dict[str, Any]:
+        if sys.platform.startswith("linux"):
+            # Prefer KDE-native screenshot via KWin DBus to avoid spectacle DBus collisions.
+            if shutil.which("qdbus"):
+                try:
+                    subprocess.run(
+                        [
+                            "qdbus",
+                            "org.kde.kwin",
+                            "/KWin",
+                            "org.kde.kwin.screenshot",
+                            "/tmp/tact-screenshot.png",
+                        ],
+                        check=True,
+                        capture_output=True,
+                    )
+                    return {"ok": True, "command": "kwin", "path": "/tmp/tact-screenshot.png"}
+                except Exception:
+                    pass
+
+            kde = ["spectacle", "-b", "-f", "/tmp/tact-screenshot.png"]
+            if shutil.which("spectacle"):
+                return self._run_platform_command(linux=kde)
+            gnome = ["gnome-screenshot", "-f", "/tmp/tact-screenshot.png"]
+            if shutil.which("gnome-screenshot"):
+                return self._run_platform_command(linux=gnome)
+            return {"ok": False, "error": "no_screenshot_tool_found"}
         return self._run_platform_command(
             linux=["gnome-screenshot", "-f", "/tmp/tact-screenshot.png"],
             darwin=["screencapture", "-x", "/tmp/tact-screenshot.png"],

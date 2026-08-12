@@ -3,9 +3,9 @@ import logging
 import psutil
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -62,6 +62,8 @@ async def debug_config():
             for p in config._data.get("pending_pairings", [])
         ],
         "pairing_token_exists": config._data.get("pairing_token") is not None,
+        "pairing_token": config._data.get("pairing_token"),
+        "pairing_token_expires": config._data.get("pairing_token_expires"),
     }
 
 
@@ -78,6 +80,19 @@ async def pair_status():
     }
 
 
+@app.get("/api/pair/me")
+async def pair_me(device_id: str = ""):
+    if not device_id:
+        return {"paired": False, "device_id": None}
+    devices = config.list_devices()
+    device = next((d for d in devices if d.device_id == device_id), None)
+    return {
+        "paired": device is not None,
+        "device_id": device_id,
+        "device": {"device_id": device.device_id, "label": device.label, "last_seen": device.last_seen} if device else None,
+    }
+
+
 @app.post("/api/pair/request")
 async def pair_request(payload: dict):
     token = payload.get("token")
@@ -87,6 +102,8 @@ async def pair_request(payload: dict):
         raise HTTPException(status_code=400, detail="token and device_id required")
     if not config.consume_pairing_token(token):
         raise HTTPException(status_code=400, detail="invalid_or_expired_token")
+    pendings = config._data.get("pending_pairings", [])
+    config._data["pending_pairings"] = [p for p in pendings if p.get("device_id") != device_id]
     pending = config.create_pending_pairing(token, device_id, label)
     _logger.info(
         "Pairing request from %s (%s). Approve at http://%s/admin/pair/pending",
@@ -128,13 +145,59 @@ async def pair_reject(payload: dict):
     return {"ok": True}
 
 
+@app.post("/api/pair/reset")
+async def pair_reset(payload: dict):
+    device_id = payload.get("device_id")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id required")
+    config.unpair_device(device_id)
+    pendings = config._data.get("pending_pairings", [])
+    config._data["pending_pairings"] = [p for p in pendings if p.get("device_id") != device_id]
+    config._save()
+    return {"ok": True}
+
+@app.post("/api/pair/reset_all")
+async def pair_reset_all():
+    config._data["paired_devices"] = []
+    config._data["pending_pairings"] = []
+    config._save()
+    return {"ok": True}
+
+
 @app.get("/api/state")
 async def get_state():
     return {"state": snapshot_state()}
 
 
+@app.post("/api/workspace/set")
+async def set_workspace(payload: dict):
+    path = payload.get("path")
+    if not path:
+        raise HTTPException(status_code=400, detail="path required")
+    p = Path(path)
+    if not p.is_dir():
+        raise HTTPException(status_code=400, detail="not_a_directory")
+    resolved = str(p.resolve())
+    app.state.current_workspace = resolved
+    actions.set_current_workspace_path(resolved)
+    _logger.info("Workspace override set to %s", resolved)
+    return {"ok": True, "workspace": resolved}
+
+
+def _current_workspace_path() -> str:
+    override = getattr(app.state, "current_workspace", None)
+    if override:
+        return override
+    vscode_workspaces = actions.vscode.workspaces()
+    detected = vscode_workspaces.get("workspaces", []) if vscode_workspaces.get("available") else []
+    if detected:
+        return detected[0]
+    return str(Path.cwd())
+
+
 def snapshot_state() -> dict[str, Any]:
-    current_root = actions.git.discover_root(Path.cwd())
+    workspace_path = _current_workspace_path()
+    current_root = actions.git.discover_root(workspace_path)
     git_status = actions.git.status(current_root) if current_root else {"available": False, "root": None}
     git_branches = actions.git.branches(current_root) if current_root else {"available": False, "branches": [], "current": None}
     git_tree = actions.git.tree(current_root) if current_root else {"available": False, "tree": []}
@@ -156,6 +219,7 @@ def snapshot_state() -> dict[str, Any]:
             "git_branches": git_branches,
             "git_tree": git_tree,
             "terminal_available": terminal_available,
+            "current_workspace": workspace_path,
         },
         "actions": sorted(actions._registry.keys()),
     }
@@ -260,36 +324,54 @@ async def websocket_endpoint(websocket: WebSocket):
 admin = FastAPI()
 
 
-@admin.get("/pending")
+@admin.get("/pair/pending")
 async def admin_pending():
     pending = config._data.get("pending_pairings", [])
     devices = config.list_devices()
+    items = []
+    for p in pending:
+        pending_id = p.get("pending_id", "")
+        label = p.get("label", "")
+        device_id = p.get("device_id", "")
+        created_at = p.get("created_at", "")
+        items.append(
+            f"<li><strong>{label}</strong> ({device_id})"
+            f"<div style=\"font-size:11px;color:#666;margin-bottom:6px;\">Created: {created_at}</div>"
+            f'<form method="POST" action="/admin/pair/approve" style="display:inline;margin-right:6px;">'
+            f'<input type="hidden" name="pending_id" value="{pending_id}" />'
+            f'<button type="submit" class="approve">Approve</button></form>'
+            f'<form method="POST" action="/admin/pair/reject" style="display:inline;">'
+            f'<input type="hidden" name="pending_id" value="{pending_id}" />'
+            f'<button type="submit" class="reject">Reject</button></form></li>'
+        )
     html = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />
 <title>Tact Pairing Approvals</title>
+<meta http-equiv=\"refresh\" content=\"5\" />
 <style>
 body {{ font-family: sans-serif; background:#f5f5f5; color:#333; padding:24px; }}
 .card {{ background:#fff; padding:16px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1); max-width: 480px; margin: 0 auto; }}
 h1 {{ font-size: 18px; margin-bottom: 12px; }}
-a {{ color:#2d2d2d; }}
-.approve {{ background:#28a745; color:#fff; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; text-decoration:none; display:inline-block; margin:4px; }}
-.reject {{ background:#dc3545; color:#fff; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; text-decoration:none; display:inline-block; margin:4px; }}
+.approve {{ background:#28a745; color:#fff; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-size: 12px; }}
+.reject {{ background:#dc3545; color:#fff; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-size: 12px; }}
+.refresh {{ background:#2d2d2d; color:#fff; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-size: 12px; text-decoration:none; display:inline-block; margin-left: 8px; }}
 </style>
 </head>
 <body>
-<div class="card">
-<h1>Pending Pairing Requests</h1>
+<div class=\"card\">
+<h1>Pending Pairing Requests <a href=\"/admin/pair/pending\" class=\"refresh\">Refresh Now</a></h1>
 <ul>
-{''.join([f'<li>{p.get("label")} ({p.get("device_id")}) <a class="approve" href="/admin/approve?id={p.get("pending_id")}">Approve</a> <a class="reject" href="/admin/reject?id={p.get("pending_id")}">Reject</a></li>' for p in pending])}
+{''.join(items) if items else '<li>No pending requests</li>'}
 </ul>
-<p>Paired devices: {len(devices)}</p>
+<p><strong>Paired devices:</strong> {len(devices)}</p>
+<p><a href=\"/\">Back to agent home</a></p>
 </div>
 </body>
 </html>"""
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 async def _admin_approve(pending_id: str):
@@ -352,24 +434,26 @@ a {{ color:#2d2d2d; }}
 </html>""")
 
 
-@admin.get("/approve")
+@admin.get("/pair/approve")
 async def admin_approve_get(id: str = ""):
     return await _admin_approve(id)
 
 
-@admin.post("/approve")
-async def admin_approve_post(payload: dict):
-    return await _admin_approve(payload.get("id") or payload.get("pending_id") or "")
+@admin.post("/pair/approve")
+async def admin_approve_post(pending_id: Optional[str] = Form(None), id: Optional[str] = Form(None)):
+    pid = pending_id or id or ""
+    return await _admin_approve(pid)
 
 
-@admin.get("/reject")
+@admin.get("/pair/reject")
 async def admin_reject_get(id: str = ""):
     return await _admin_reject(id)
 
 
-@admin.post("/reject")
-async def admin_reject_post(payload: dict):
-    return await _admin_reject(payload.get("id") or payload.get("pending_id") or "")
+@admin.post("/pair/reject")
+async def admin_reject_post(pending_id: Optional[str] = Form(None), id: Optional[str] = Form(None)):
+    pid = pending_id or id or ""
+    return await _admin_reject(pid)
 
 
 app.mount("/admin", admin)

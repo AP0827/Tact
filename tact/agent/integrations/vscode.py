@@ -69,6 +69,12 @@ class VSCodeIntegration:
                     for arg in cmdline:
                         if arg.startswith("-") or arg in names:
                             continue
+                        if arg.startswith("file://"):
+                            arg = arg[len("file://"):]
+                        if arg.startswith("--folder-uri="):
+                            arg = arg[len("--folder-uri="):]
+                            if arg.startswith("file://"):
+                                arg = arg[len("file://"):]
                         p = Path(arg)
                         if p.is_dir() and str(p) not in seen:
                             seen.add(str(p))
@@ -77,11 +83,17 @@ class VSCodeIntegration:
                     continue
         except Exception:
             pass
+
+        filtered = [p for p in workspaces if Path(p).is_dir()]
+        if not filtered:
+            fallback = str(Path.cwd())
+            if Path(fallback).is_dir():
+                filtered.append(fallback)
         return {
             "available": self.is_available(),
             "running": self.is_running(),
-            "workspaces": workspaces,
-            "count": len(workspaces),
+            "workspaces": filtered,
+            "count": len(filtered),
         }
 
     def _which(self, command: str) -> Optional[str]:

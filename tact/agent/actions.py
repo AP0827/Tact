@@ -19,11 +19,12 @@ class OpenUrlPayload(BaseModel):
 class ActionRegistry:
     """Simple allowlisted action registry."""
 
-    def __init__(self):
+    def __init__(self, current_workspace_path=None):
         self.git = GitIntegration()
         self.vscode = VSCodeIntegration()
         self.system = SystemIntegration()
         self.event_bus = EventBus()
+        self._current_workspace_path = current_workspace_path
         self._registry = {
             "system.open_url": self._open_url,
             "system.volume_up": self._volume_up,
@@ -44,6 +45,17 @@ class ActionRegistry:
             "git.push": self._git_push,
             "git.commit": self._git_commit,
         }
+
+    def set_current_workspace_path(self, path: str):
+        self._current_workspace_path = path
+
+    def _resolve_path(self, payload: dict) -> str | None:
+        path = payload.get("path") if isinstance(payload, dict) else None
+        if path:
+            return path
+        if self._current_workspace_path:
+            return self._current_workspace_path
+        return None
 
     def execute(self, action_id: str, payload: dict):
         handler = self._registry.get(action_id)
@@ -103,15 +115,15 @@ class ActionRegistry:
         return self.vscode.workspaces()
 
     def _git_status(self, payload: dict):
-        path = payload.get("path") if isinstance(payload, dict) else None
+        path = self._resolve_path(payload)
         return self.git.status(path)
 
     def _git_branches(self, payload: dict):
-        path = payload.get("path") if isinstance(payload, dict) else None
+        path = self._resolve_path(payload)
         return self.git.branches(path)
 
     def _git_tree(self, payload: dict):
-        path = payload.get("path") if isinstance(payload, dict) else None
+        path = self._resolve_path(payload)
         max_depth = int(payload.get("max_depth") or 3) if isinstance(payload, dict) else 3
         return self.git.tree(path, max_depth=max_depth)
 
@@ -119,7 +131,7 @@ class ActionRegistry:
         return self.vscode.workspaces()
 
     def _git_pull(self, payload: dict):
-        path = payload.get("path") if isinstance(payload, dict) else None
+        path = self._resolve_path(payload)
         branch = payload.get("branch") if isinstance(payload, dict) else None
         args = ["pull", "--ff-only"]
         if branch:
@@ -127,7 +139,7 @@ class ActionRegistry:
         return self.git._run_git_action(path, args)
 
     def _git_push(self, payload: dict):
-        path = payload.get("path") if isinstance(payload, dict) else None
+        path = self._resolve_path(payload)
         branch = payload.get("branch") if isinstance(payload, dict) else None
         args = ["push"]
         if branch:
@@ -139,14 +151,14 @@ class ActionRegistry:
         branch = payload.get("branch") if isinstance(payload, dict) else None
         if not branch:
             return {"ok": False, "error": "branch_required"}
-        path = payload.get("path") if isinstance(payload, dict) else None
+        path = self._resolve_path(payload)
         return self.git._run_git_action(path, ["checkout", branch])
 
     def _git_commit(self, payload: dict):
         message = str(payload.get("message") or "") if isinstance(payload, dict) else ""
         if not message.strip():
             return {"ok": False, "error": "commit_message_required"}
-        path = payload.get("path") if isinstance(payload, dict) else None
+        path = self._resolve_path(payload)
         if not self.git.is_dirty(path):
             return {"ok": False, "error": "nothing_to_commit", "message": "working directory is clean"}
         return self.git.commit(message, path)

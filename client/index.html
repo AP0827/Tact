@@ -445,19 +445,21 @@
       <p style="font-size: 13px; opacity: 0.8; text-align: center; max-width: 280px;">Enter the 6-digit OTP shown on your desktop terminal.</p>
       <input id="pairingToken" placeholder="000000" maxlength="6" autocomplete="off" />
       <button onclick="window.requestPairing()">Request Pairing</button>
+      <button onclick="window.resetPairing()" style="background: transparent; color: var(--primary-700); border: 1px solid var(--primary-200); margin-top: 8px;">Reset Pairing</button>
       <p id="pairingError" style="color: var(--primary-700); font-size: 12px; font-weight: 600;"></p>
       <p id="pairingPending" style="color: var(--primary-700); font-size: 12px; display: none;">Waiting for approval on your laptop... Visit the admin page shown in the terminal to approve.</p>
     </div>
 
-    <nav>
-      <div>
-        <h1>Tact</h1>
-      </div>
-      <div class="status">
-        <span class="connection-status" id="connStatus"></span>
-        <span id="statusText">Connecting…</span>
-      </div>
-    </nav>
+      <nav>
+        <div>
+          <h1>Tact</h1>
+        </div>
+        <div class="status">
+          <span class="connection-status" id="connStatus"></span>
+          <span id="statusText">Connecting…</span>
+          <button id="reconnectBtn" style="display:none; padding:4px 8px; font-size:11px; min-width:auto; background:var(--primary-600);" onclick="window.reconnect()">Reconnect</button>
+        </div>
+      </nav>
 
     <div class="container">
       <div class="tabs">
@@ -562,7 +564,7 @@
 
             <div class="section-title" style="margin-top: 12px;">Actions</div>
             <div class="buttons">
-              <button onclick="window.sendAction('git.status')">Refresh</button>
+              <button onclick="window.refreshGit()">Refresh</button>
               <button onclick="window.sendAction('git.pull')">Pull</button>
               <button onclick="window.sendAction('git.push')">Push</button>
             </div>
@@ -629,12 +631,51 @@
         } catch (e) {
           recentWorkspaces = []
         }
+        let pairingInProgress = false
+        let stableDeviceId = localStorage.getItem('tact_stable_device_id')
+        if (!stableDeviceId) {
+          try {
+            stableDeviceId = crypto.randomUUID()
+          } catch (e) {
+            stableDeviceId = 'device-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
+          }
+          try {
+            localStorage.setItem('tact_stable_device_id', stableDeviceId)
+          } catch (e) {}
+        }
+
+        function resetPairing() {
+          console.log('Resetting pairing state')
+          fetch('/api/pair/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: currentDeviceId || stableDeviceId })
+          }).catch(() => {})
+          localStorage.removeItem('tact_device_id')
+          localStorage.removeItem('tact_pair_token')
+          localStorage.removeItem('tact_stable_device_id')
+          currentDeviceId = ''
+          currentToken = ''
+          pairingInProgress = false
+          if (pairingTimer) clearInterval(pairingTimer)
+          pairingTimer = null
+          pairingTokenInput.disabled = false
+          pairingPending.style.display = 'none'
+          pairingError.textContent = ''
+          showPairing(true)
+          if (ws) {
+            try { ws.close() } catch (e) {}
+          }
+        }
+
+        window.resetPairing = resetPairing
 
         function showPairing(show) {
           console.log('showPairing', show)
           if (show) {
             pairingOverlay.classList.remove('hidden')
             statusText.textContent = 'Not paired'
+            document.getElementById('reconnectBtn').style.display = 'none'
           } else {
             pairingOverlay.classList.add('hidden')
           }
@@ -652,22 +693,41 @@
 
         function renderWorkspaceMenu(workspaces) {
           workspaceMenu.innerHTML = ''
-          const items = workspaces.length > 0 ? workspaces : recentWorkspaces
-          if (items.length === 0) {
-            workspaceMenu.innerHTML = '<div class="workspace-menu-empty">No recent workspaces</div>'
-            return
-          }
-          items.forEach(ws => {
-            const div = document.createElement('div')
-            div.className = 'workspace-menu-item'
-            div.textContent = ws
-            div.onclick = () => {
-              addRecentWorkspace(ws)
-              window.sendAction('vscode.open_workspace', { path: ws })
-              workspaceMenu.style.display = 'none'
+          const items = new Set()
+          const detected = workspaces.length > 0 ? workspaces : []
+          const recent = recentWorkspaces || []
+          const current = currentWorkspace ? [currentWorkspace] : []
+          const allWorkspaces = current.concat(detected, recent)
+          allWorkspaces.forEach(ws => {
+            if (ws && !items.has(ws)) {
+              items.add(ws)
+              const div = document.createElement('div')
+              div.className = 'workspace-menu-item'
+              div.textContent = ws
+              div.onclick = () => {
+                addRecentWorkspace(ws)
+                currentWorkspace = ws
+                fetch('/api/workspace/set', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ path: ws })
+                }).then(r => r.json()).then(data => {
+                  console.log('workspace set', data)
+                }).catch(err => console.error('workspace set failed', err))
+                window.sendAction('vscode.open_workspace', { path: ws })
+                workspaceMenu.style.display = 'none'
+                setTimeout(() => {
+                  window.sendAction('git.status', { path: ws })
+                  window.sendAction('git.branches', { path: ws })
+                  window.sendAction('git.tree', { path: ws })
+                }, 500)
+              }
+              workspaceMenu.appendChild(div)
             }
-            workspaceMenu.appendChild(div)
           })
+          if (items.size === 0) {
+            workspaceMenu.innerHTML = '<div class="workspace-menu-empty">No workspaces found. Open a project in VS Code or add manually.</div>'
+          }
         }
 
         window.openWorkspaceMenu = function() {
@@ -692,37 +752,50 @@
         })
 
         async function requestPairing() {
+          if (pairingInProgress) {
+            console.log('Pairing already in progress')
+            return
+          }
           const token = pairingTokenInput.value.trim()
-          console.log('requestPairing', { token })
+          console.log('requestPairing', { token, stableDeviceId })
           if (!token || token.length !== 6) {
             pairingError.textContent = 'Enter the 6-digit OTP from the desktop terminal'
             return
           }
           pairingError.textContent = ''
+          pairingInProgress = true
+          pairingTokenInput.disabled = true
           try {
             const res = await fetch('/api/pair/request', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ token, device_id: 'phone-' + Date.now(), label: 'Phone' }),
+              body: JSON.stringify({ token, device_id: stableDeviceId, label: 'Phone' }),
             })
-            const data = await res.json()
+            const text = await res.text()
+            console.log('pair request raw response', text)
+            let data = {}
+            try { data = JSON.parse(text) } catch (e) { data = { raw: text } }
             console.log('pair request response', data)
             if (!res.ok || !data.ok) {
-              pairingError.textContent = (data && data.detail) || 'Pairing request failed'
+              const detail = (data && data.detail) || 'Pairing request failed'
+              pairingError.textContent = detail + (data.raw ? ' (' + data.raw + ')' : '')
+              pairingInProgress = false
+              pairingTokenInput.disabled = false
               return
             }
             currentToken = token
-            currentDeviceId = data.device_id
+            currentDeviceId = stableDeviceId
             try {
               localStorage.setItem('tact_pair_token', currentToken)
               localStorage.setItem('tact_device_id', currentDeviceId)
             } catch (e) {}
             pairingPending.style.display = 'block'
-            pairingTokenInput.disabled = true
             pollPairingStatus()
           } catch (e) {
             console.error('pair request failed', e)
-            pairingError.textContent = 'Network error'
+            pairingError.textContent = 'Network error: ' + e.message
+            pairingInProgress = false
+            pairingTokenInput.disabled = false
           }
         }
 
@@ -733,27 +806,30 @@
           if (pairingTimer) clearInterval(pairingTimer)
           pairingTimer = setInterval(async () => {
             try {
-              const res = await fetch('/api/pair/status')
+              const res = await fetch('/api/pair/me?device_id=' + encodeURIComponent(currentDeviceId) + '&t=' + Date.now(), {
+                method: 'GET',
+                headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+              })
               const data = await res.json()
               console.log('pair status poll', data)
-              const paired = data.devices && data.devices.some(d => d.device_id === currentDeviceId)
-              if (paired) {
+              if (data.paired) {
                 console.log('device paired, connecting')
                 clearInterval(pairingTimer)
                 pairingTimer = null
+                pairingPending.style.display = 'none'
+                pairingTokenInput.disabled = false
                 showPairing(false)
-                connect()
+                setTimeout(() => connect(), 300)
               }
             } catch (e) {
               console.error('pair status poll failed', e)
             }
-          }, 2000)
+          }, 1500)
         }
 
         function renderTree(nodes, container, depth = 0) {
-          container.innerHTML = ''
           if (!nodes || nodes.length === 0) {
-            container.textContent = 'No files'
+            container.innerHTML = 'No files'
             return
           }
           const ul = document.createElement('div')
@@ -764,9 +840,12 @@
             div.textContent = (node.type === 'dir' ? '📁 ' : '📄 ') + node.name
             ul.appendChild(div)
             if (node.children && node.children.length > 0) {
-              renderTree(node.children, ul, depth + 1)
+              const childContainer = document.createElement('div')
+              ul.appendChild(childContainer)
+              renderTree(node.children, childContainer, depth + 1)
             }
           })
+          container.innerHTML = ''
           container.appendChild(ul)
         }
 
@@ -775,6 +854,7 @@
           if (ws) {
             try { ws.close() } catch (e) { /* ignore */ }
           }
+          document.getElementById('reconnectBtn').style.display = 'none'
           const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
           const wsUrl = `${scheme}://${location.host}/ws`
           logEvent('Connecting to ' + wsUrl)
@@ -793,6 +873,7 @@
             clearTimeout(connectionTimeout)
             connStatus.classList.add('connected')
             statusText.textContent = 'Connected'
+            document.getElementById('reconnectBtn').style.display = 'none'
             reconnectAttempts = 0
             ws.send(JSON.stringify({ type: 'auth', token: currentDeviceId, label: 'phone' }))
           })
@@ -832,13 +913,22 @@
                 const gitBranches = workspace.git_branches || {}
                 if (gitBranches && gitBranches.available) {
                   gitBranchSelect.innerHTML = ''
-                  (gitBranches.branches || []).forEach(b => {
+                  if (gitBranches.branches && gitBranches.branches.length > 0) {
+                    gitBranches.branches.forEach(b => {
+                      const opt = document.createElement('option')
+                      opt.value = b
+                      opt.textContent = b
+                      if (b === gitBranches.current) opt.selected = true
+                      gitBranchSelect.appendChild(opt)
+                    })
+                  } else {
                     const opt = document.createElement('option')
-                    opt.value = b
-                    opt.textContent = b
-                    if (b === gitBranches.current) opt.selected = true
+                    opt.value = ''
+                    opt.textContent = 'No branches'
                     gitBranchSelect.appendChild(opt)
-                  })
+                  }
+                } else {
+                  gitBranchSelect.innerHTML = '<option value="">Not a git repository</option>'
                 }
 
                 const gitTree = workspace.git_tree || {}
@@ -874,6 +964,47 @@
                 if (msg.action_id === 'vscode.status' || msg.action_id === 'vscode.workspaces') {
                   vscodeResultEl.textContent = JSON.stringify(msg.result, null, 2)
                   vscodeResultEl.style.display = 'block'
+                  if (msg.action_id === 'vscode.workspaces' && msg.result && msg.result.workspaces) {
+                    window._lastVscodeWorkspaces = msg.result
+                    vscodeWorkspaceCountEl.textContent = msg.result.count !== undefined ? msg.result.count + ' open' : '-'
+                    recentWorkspaces = msg.result.workspaces.filter((w) => !recentWorkspaces.includes(w)).concat(recentWorkspaces)
+                    try {
+                      localStorage.setItem('tact_recent_workspaces', JSON.stringify(recentWorkspaces.slice(0, 10)))
+                    } catch (e) {}
+                  }
+                } else if (msg.action_id === 'git.status' && msg.result) {
+                  const git = msg.result
+                  if (git.available) {
+                    gitBranchEl.textContent = git.branch || '(no branch)'
+                    gitCleanEl.textContent = git.clean ? 'clean' : `dirty (${git.changed_files || 0})`
+                    gitStateEl.textContent = git.clean ? 'CLEAN' : 'DIRTY'
+                    gitStateEl.className = 'status-badge ' + (git.clean ? 'ok' : 'error')
+                    currentWorkspace = git.root || currentWorkspace
+                  } else {
+                    gitStateEl.textContent = 'N/A'
+                    gitStateEl.className = 'status-badge info'
+                  }
+                } else if (msg.action_id === 'git.branches' && msg.result) {
+                  const gitBranches = msg.result
+                  if (gitBranches.available) {
+                    gitBranchSelect.innerHTML = ''
+                    (gitBranches.branches || []).forEach(b => {
+                      const opt = document.createElement('option')
+                      opt.value = b
+                      opt.textContent = b
+                      if (b === gitBranches.current) opt.selected = true
+                      gitBranchSelect.appendChild(opt)
+                    })
+                  } else {
+                    gitBranchSelect.innerHTML = '<option value="">No git repo</option>'
+                  }
+                } else if (msg.action_id === 'git.tree' && msg.result) {
+                  const gitTree = msg.result
+                  if (gitTree.available) {
+                    renderTree(gitTree.tree || [], gitTreeEl)
+                  } else {
+                    gitTreeEl.textContent = 'Not a git repository'
+                  }
                 } else if (msg.action_id.startsWith('git.')) {
                   gitResultEl.textContent = JSON.stringify(msg.result, null, 2)
                   gitResultEl.style.display = 'block'
@@ -892,6 +1023,7 @@
             clearTimeout(connectionTimeout)
             connStatus.classList.remove('connected')
             statusText.textContent = 'Disconnected'
+            document.getElementById('reconnectBtn').style.display = 'inline-block'
             if (!currentDeviceId || ev.code === 4003 || ev.code === 4001) {
               showPairing(true)
             }
@@ -903,6 +1035,7 @@
             clearTimeout(connectionTimeout)
             connStatus.classList.remove('connected')
             statusText.textContent = 'Error'
+            document.getElementById('reconnectBtn').style.display = 'inline-block'
             logEvent('WebSocket error')
           })
         }
@@ -916,6 +1049,15 @@
               connect()
             }
           }, delay)
+        }
+
+        window.reconnect = function() {
+          reconnectAttempts = 0
+          if (currentDeviceId) {
+            connect()
+          } else {
+            location.reload()
+          }
         }
 
         function logEvent(line) {
@@ -952,6 +1094,13 @@
           window.sendAction('git._switch_branch', { path: currentWorkspace, branch })
         }
 
+        window.refreshGit = function() {
+          const path = currentWorkspace
+          window.sendAction('git.status', { path })
+          window.sendAction('git.branches', { path })
+          window.sendAction('git.tree', { path })
+        }
+
         document.querySelectorAll('.tab-btn').forEach(btn => {
           btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
@@ -962,14 +1111,18 @@
         })
 
         async function init() {
-          console.log('Tact client init', { currentDeviceId, currentToken })
-          if (currentDeviceId) {
+          console.log('Tact client init', { currentDeviceId, currentToken, stableDeviceId })
+          document.getElementById('reconnectBtn').style.display = 'none'
+          const deviceId = currentDeviceId || stableDeviceId
+          if (deviceId) {
             try {
-              const res = await fetch('/api/pair/status')
+              const res = await fetch('/api/pair/me?device_id=' + encodeURIComponent(deviceId) + '&t=' + Date.now(), {
+                headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+              })
               const data = await res.json()
-              console.log('Pairing status', data)
-              const paired = data.devices && data.devices.some(d => d.device_id === currentDeviceId)
-              if (paired) {
+              console.log('Pairing me status', data)
+              if (data.paired) {
+                currentDeviceId = deviceId
                 showPairing(false)
                 statusText.textContent = 'Connecting…'
                 connect()
@@ -993,6 +1146,7 @@
         function showConnectionError(message) {
           console.error('Connection error:', message)
           statusText.textContent = message || 'Connection failed'
+          document.getElementById('reconnectBtn').style.display = 'inline-block'
           logEvent('Connection issue: ' + (message || 'unknown'))
         }
 
