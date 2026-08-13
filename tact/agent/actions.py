@@ -127,9 +127,6 @@ class ActionRegistry:
         max_depth = int(payload.get("max_depth") or 3) if isinstance(payload, dict) else 3
         return self.git.tree(path, max_depth=max_depth)
 
-    def _vscode_workspaces(self, payload: dict):
-        return self.vscode.workspaces()
-
     def _git_pull(self, payload: dict):
         path = self._resolve_path(payload)
         branch = payload.get("branch") if isinstance(payload, dict) else None
