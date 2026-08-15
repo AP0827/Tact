@@ -76,6 +76,20 @@ class GitIntegration:
         data["available"] = True
         return data
 
+    def add(self, start_path: str | Path | None = None) -> dict[str, Any]:
+        return self._run_git_action(start_path, ["add", "-A"])
+
+    def log(self, start_path: str | Path | None = None, limit: int = 40) -> dict[str, Any]:
+        root = self.discover_root(start_path)
+        if root is None or not self.is_available():
+            return {"available": False, "commits": []}
+        args = ["log", "--graph", "--oneline", "--decorate=short", "--all", "-n", str(limit)]
+        output = self._run_git(root, args)
+        if not output:
+            return {"available": True, "commits": [], "root": str(root)}
+        commits = [line for line in output.splitlines() if line.strip()]
+        return {"available": True, "commits": commits, "root": str(root)}
+
     def pull(self, start_path: str | Path | None = None) -> dict[str, Any]:
         return self._run_git_action(start_path, ["pull", "--ff-only"])
 

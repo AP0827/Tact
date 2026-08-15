@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from tact.agent.integrations.git import GitIntegration
 from tact.agent.integrations.vscode import VSCodeIntegration
+from tact.agent.integrations.media import MediaIntegration
 
 
 class GitIntegrationTests(unittest.TestCase):
@@ -166,6 +167,51 @@ class VSCodeIntegrationTests(unittest.TestCase):
                 self.assertIn(str(project_dir), result["workspaces"])
         finally:
             del sys.modules["psutil"]
+
+
+class MediaIntegrationTests(unittest.TestCase):
+    @patch("tact.agent.integrations.media.shutil.which", return_value="/usr/bin/playerctl")
+    @patch("tact.agent.integrations.media.subprocess.run")
+    def test_status_reports_unavailable_when_players_missing(self, mock_run, mock_which):
+        class Result:
+            def __init__(self, returncode=0, stdout=""):
+                self.returncode = returncode
+                self.stdout = stdout
+
+        mock_run.return_value = Result()
+        integration = MediaIntegration()
+        self.assertTrue(integration.is_available())
+        status = integration.status()
+        self.assertTrue(status["available"])
+        self.assertEqual(status["players"], [])
+        self.assertIsNone(status["active"])
+        self.assertNotIn("hint", status)
+
+    @patch("tact.agent.integrations.media.shutil.which", return_value=None)
+    def test_status_reports_not_installed(self, mock_which):
+        integration = MediaIntegration()
+        self.assertFalse(integration.is_available())
+        status = integration.status()
+        self.assertFalse(status["available"])
+        self.assertIn("error", status)
+
+    @patch("tact.agent.integrations.media.subprocess.Popen")
+    @patch("tact.agent.integrations.media.shutil.which", return_value="/usr/bin/spotify")
+    def test_open_spotify_launches_app(self, mock_which, mock_popen):
+        integration = MediaIntegration()
+        result = integration.open_spotify()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["method"], "app")
+        mock_popen.assert_called_once()
+
+    @patch("tact.agent.integrations.media.subprocess.Popen")
+    @patch("tact.agent.integrations.media.shutil.which", return_value=None)
+    def test_open_spotify_falls_back_when_not_installed(self, mock_which, mock_popen):
+        integration = MediaIntegration()
+        result = integration.open_spotify()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["method"], "app_not_found")
+        self.assertIn("fallback", result)
 
 
 if __name__ == "__main__":

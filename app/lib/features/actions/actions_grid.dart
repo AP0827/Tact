@@ -10,10 +10,6 @@ const _knownSystemActions = <String, (String, IconData)>{
     'Lock Screen',
     Icons.lock,
   ),
-  'system.mute': (
-    'Mute',
-    Icons.volume_off,
-  ),
   'system.open_terminal': (
     'Terminal',
     Icons.terminal,
@@ -29,14 +25,6 @@ const _knownSystemActions = <String, (String, IconData)>{
   'system.screenshot': (
     'Screenshot',
     Icons.screenshot,
-  ),
-  'system.volume_down': (
-    'Volume Down',
-    Icons.volume_down,
-  ),
-  'system.volume_up': (
-    'Volume Up',
-    Icons.volume_up,
   ),
 };
 

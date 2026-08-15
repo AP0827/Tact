@@ -102,6 +102,37 @@ class SystemIntegration:
             darwin=["osascript", "-e", 'set volume output volume ((output volume of (get volume settings)) - 5)'],
         )
 
+    def volume(self, value: Optional[int] = None) -> dict[str, Any]:
+        """Get the current system volume (0..100), or set it when `value` given."""
+        if value is not None:
+            pct = max(0, min(100, int(value)))
+            result = self._run_platform_command(
+                linux=["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
+            )
+            if not result.get("ok"):
+                return result
+        if not shutil.which("pactl"):
+            return {"ok": False, "error": "pactl_not_found"}
+        try:
+            completed = subprocess.run(
+                ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            return {"ok": False, "error": "pactl_failed"}
+        if completed.returncode != 0:
+            return {"ok": False, "error": "pactl_failed"}
+        # Output looks like: "Volume: front-left: 52404 /  80% / -5.83 dB, ..."
+        for token in completed.stdout.split():
+            if token.endswith("%"):
+                try:
+                    return {"ok": True, "volume": int(token[:-1])}
+                except ValueError:
+                    pass
+        return {"ok": False, "error": "unable_to_parse_volume"}
+
     def mute(self) -> dict[str, Any]:
         return self._run_platform_command(
             linux=["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],

@@ -74,7 +74,7 @@ class _ActionButtonState
     BuildContext context,
   ) {
     return Material(
-      color: const Color(0xFFFFE4D5),
+      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
       borderRadius:
           BorderRadius.circular(22),
       child: InkWell(
@@ -91,9 +91,10 @@ class _ActionButtonState
             borderRadius:
                 BorderRadius.circular(22),
             border: Border.all(
-              color: const Color(
-                0xFFFFD4C0,
-              ),
+              color: Theme.of(context)
+                  .colorScheme
+                  .primary
+                  .withValues(alpha: 0.35),
             ),
           ),
           child: Column(
@@ -114,6 +115,9 @@ class _ActionButtonState
                   widget.icon ??
                       Icons.bolt,
                   size: 24,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary,
                 ),
 
               const SizedBox(height: 8),
@@ -125,10 +129,13 @@ class _ActionButtonState
                 maxLines: 2,
                 overflow:
                     TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight:
                       FontWeight.w600,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface,
                 ),
               ),
             ],

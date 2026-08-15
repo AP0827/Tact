@@ -18,6 +18,9 @@ There are three moving parts:
 - JSON persistence for paired devices in `~/.tact/config.json`
 - Event bus with severity levels and actionable notifications
 - Git state, tree visualization, branch switching, pull/push/commit
+- Unified Developer tab: repository selector drives git operations + VS Code together
+- Commit graph visualization (`git.log`) and one-tap "Stage All"
+- Media controls (Spotify, browser media, VLC via MPRIS) in a dedicated tab
 - VS Code open workspace detection and recent workspaces dropdown
 - Flutter phone client (dashboard, action grid, git + VS Code cards)
 - Flutter host companion tray app (OTP display, pairing approvals, agent port config)
@@ -25,6 +28,20 @@ There are three moving parts:
 - Responsive web client fallback with orange/white theme
 
 ## Quick start
+
+### 0. System dependencies (Linux)
+
+```bash
+sudo apt install git playerctl
+```
+
+- **git** — required for all git actions (`status`, `branches`, `tree`, `log`, `add`, `pull`, `push`, `commit`).
+- **playerctl** — required for the Media tab (MPRIS). Controls Spotify, browser media sessions (Chrome/Chromium/Firefox), VLC, etc. Without it the agent reports `media.status` unavailable.
+
+Optional, feature-gated:
+- **VS Code** (`code`/`code-insiders`/`codium`) — needed for `vscode.*` actions and workspace detection.
+- **pactl** (PulseAudio) — volume up/down/mute actions.
+- **xdg-open / gio** — `system.open_url`/`system.open_project` launchers.
 
 ### 1. Desktop agent
 
@@ -150,6 +167,7 @@ fallback when the storage directory is unavailable.
 ## Available actions
 
 - `system.open_url`
+- `system.set_workspace`
 - `system.volume_up`
 - `system.volume_down`
 - `system.mute`
@@ -163,10 +181,39 @@ fallback when the storage directory is unavailable.
 - `git.status`
 - `git.branches`
 - `git.tree`
+- `git.log` — commit graph
+- `git.add` — `git add -A` (stage all)
 - `git._switch_branch`
 - `git.pull`
 - `git.push`
 - `git.commit`
+- `media.status`
+- `media.play_pause`
+- `media.next`
+- `media.previous`
+- `media.volume` — get/set volume (0..1)
+- `media.seek` — get/seek position (seconds)
+- `media.open_spotify` — launch the Spotify desktop app (web fallback)
+
+## Media controls
+
+The Media tab uses **playerctl** (MPRIS) to control Spotify, browser media
+sessions (Chrome/Chromium/Firefox), VLC, and other players from one place.
+
+```bash
+sudo apt install playerctl
+```
+
+`playerctl` exposes every running MPRIS player; no per-app APIs are needed.
+The agent reports `media.status` in its state snapshot (player list, now
+playing, position/length, volume), and the transport actions
+(`play_pause`/`next`/`previous`/`volume`/`seek`) optionally accept a `player`
+payload to target a specific app. The Media tab has a volume slider and a
+seek slider with timestamps.
+
+> **Not seeing the Media tab's controls?** The agent likely doesn't have
+> `playerctl` on its PATH. Install it (see System dependencies above), restart
+> the agent, and tap **Check Again** in the app.
 
 ## Project structure
 
@@ -183,6 +230,7 @@ tact/                        # Python desktop agent
 │   └── integrations/
 │       ├── git.py
 │       ├── vscode.py
+│       ├── media.py        # MPRIS media controls via playerctl
 │       └── system.py        # OS-isolated system actions
 app/                         # Flutter client
 ├── lib/
@@ -191,7 +239,7 @@ app/                         # Flutter client
 │   ├── protocol/message.dart
 │   ├── services/            # tact_client (WS), pairing, discovery (mDNS)
 │   ├── state/               # Riverpod providers (connection, telemetry)
-│   ├── features/            # dashboard, actions grid, git card, vscode card
+│   ├── features/            # dashboard, actions grid, developer tab, media, events
 │   ├── host/                # tray controller, status service, settings
 │   └── billing/             # entitlements (all unlocked for now)
 ├── android/ ios/ linux/ macos/ windows/
@@ -212,10 +260,15 @@ cd app && flutter test             # Flutter widget smoke test
 
 ## Color scheme
 
-The clients use a vibrant orange/white palette adapted from OptiLab:
-- Primary: `#f07316` (orange-500)
-- Background: `#ffffff`
-- Accents: warm orange gradients
+The clients use a dark "instrument cluster" theme inspired by automotive HUDs:
+- Background: `#0a0e14` (near-black graphite)
+- Surface: `#121821`
+- Primary: `#2fd3e8` (electric cyan)
+- Accent: `#f07316` (amber-orange warning)
+- Status: green (ok/playing), amber (busy), red `#ff4d5e` (critical)
+
+The System tab renders CPU/RAM/disk as circular gauges, and the Media tab
+now-playing card uses a scrolling marquee.
 
 ## Next steps
 

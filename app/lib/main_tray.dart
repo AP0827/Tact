@@ -7,6 +7,7 @@ import 'host/host_status_service.dart';
 import 'host/settings_screen.dart';
 import 'host/settings_store.dart';
 import 'host/tray_controller.dart';
+import 'theme.dart';
 
 late final HostStatusService _statusService;
 late final TrayController _trayController;
@@ -74,10 +75,7 @@ class TactTrayApp extends StatelessWidget {
     return MaterialApp(
       title: 'Tact',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFFF07316),
-      ),
+      theme: AppTheme.dark(),
       home: SettingsScreen(
         statusService: statusService,
       ),

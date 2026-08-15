@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'services/pairing.dart';
 import 'state/connection_provider.dart';
+import 'theme.dart';
 
 void main() => runApp(const ProviderScope(child: TactApp()));
 
@@ -14,7 +15,7 @@ class TactApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Tact',
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFFF07316)),
+      theme: AppTheme.dark(),
       home: const ConnectScreen(),
     );
   }

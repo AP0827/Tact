@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/connection_provider.dart';
 import '../../state/telemetry_provider.dart';
+import '../../theme.dart';
+import '../../widgets/gauge.dart';
 import '../actions/actions_grid.dart';
+import '../developer/developer_tab.dart';
 import '../events/event_feed.dart';
-import '../git/git_card.dart';
-import '../vscode/vscode_card.dart';
+import '../media/media_tab.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -31,8 +33,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               index: _tab,
               children: const [
                 _SystemTab(),
-                GitCard(),
-                VscodeCard(),
+                DeveloperTab(),
+                MediaTab(),
                 EventFeed(),
               ],
             ),
@@ -41,8 +43,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onDestinationSelected: (index) => setState(() => _tab = index),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.monitor), label: 'System'),
-          NavigationDestination(icon: Icon(Icons.account_tree), label: 'Git'),
-          NavigationDestination(icon: Icon(Icons.code), label: 'VS Code'),
+          NavigationDestination(icon: Icon(Icons.developer_mode), label: 'Developer'),
+          NavigationDestination(icon: Icon(Icons.headphones), label: 'Media'),
           NavigationDestination(icon: Icon(Icons.notifications), label: 'Events'),
         ],
       ),
@@ -76,37 +78,43 @@ class _SystemSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cpu = (system['cpu'] as num?)?.toDouble() ?? 0;
+    final mem = (system['memory'] as num?)?.toDouble() ?? 0;
+    final disk = (system['disk'] as num?)?.toDouble();
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 20),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _Stat(label: 'CPU', value: system['cpu']),
-            _Stat(label: 'RAM', value: system['memory']),
-            _Stat(label: 'Disk', value: system['disk']),
+            Gauge(
+              label: 'CPU',
+              value: cpu,
+              color: _gaugeColor(cpu),
+              icon: Icons.memory,
+            ),
+            Gauge(
+              label: 'RAM',
+              value: mem,
+              color: _gaugeColor(mem),
+              icon: Icons.developer_board,
+            ),
+            Gauge(
+              label: 'Disk',
+              value: disk ?? 0,
+              color: disk == null ? AppTheme.muted : _gaugeColor(disk),
+              icon: Icons.storage,
+            ),
           ],
         ),
       ),
     );
   }
-}
 
-class _Stat extends StatelessWidget {
-  final String label;
-  final dynamic value; // nullable — e.g. disk is null if cwd doesn't exist
-  const _Stat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final text = value == null
-        ? '—'
-        : '${(value as num).toDouble().toStringAsFixed(0)}%';
-    return Column(
-      children: [
-        Text(text, style: Theme.of(context).textTheme.headlineSmall),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    );
+  Color _gaugeColor(double value) {
+    if (value >= 85) return const Color(0xFFFF4D5E);
+    if (value >= 60) return AppTheme.accent;
+    return AppTheme.primary;
   }
 }

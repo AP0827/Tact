@@ -215,11 +215,21 @@ def _current_workspace_path() -> str:
     override = getattr(app.state, "current_workspace", None)
     if override:
         return override
+    actions_override = actions._current_workspace_path
+    if actions_override:
+        return actions_override
     vscode_workspaces = actions.vscode.workspaces()
     detected = vscode_workspaces.get("workspaces", []) if vscode_workspaces.get("available") else []
     if detected:
         return detected[0]
     return str(Path.cwd())
+
+
+def _is_state_changing_action(action_id: str) -> bool:
+    """Actions that mutate state we snapshot — the phone should refresh after."""
+    return action_id.startswith(
+        ("git.", "media.", "system.set_workspace", "vscode.open_workspace")
+    )
 
 
 def snapshot_state() -> dict[str, Any]:
@@ -228,6 +238,7 @@ def snapshot_state() -> dict[str, Any]:
     git_status = actions.git.status(current_root) if current_root else {"available": False, "root": None}
     git_branches = actions.git.branches(current_root) if current_root else {"available": False, "branches": [], "current": None}
     git_tree = actions.git.tree(current_root) if current_root else {"available": False, "tree": []}
+    git_log = actions.git.log(current_root) if current_root else {"available": False, "commits": []}
     vscode_status = actions.vscode.status(current_root)
     vscode_workspaces = actions.vscode.workspaces()
     terminal_available = bool(shutil.which("gnome-terminal") or shutil.which("konsole") or shutil.which("kitty") or shutil.which("alacritty") or shutil.which("xfce4-terminal"))
@@ -236,7 +247,9 @@ def snapshot_state() -> dict[str, Any]:
             "cpu": psutil.cpu_percent(interval=None),
             "memory": psutil.virtual_memory().percent,
             "disk": psutil.disk_usage(str(Path.cwd())).percent if Path.cwd().exists() else None,
+            "volume": actions.system.volume().get("volume"),
         },
+        "media": actions.media.status(),
         "workspace": {
             "cwd": str(Path.cwd()),
             "git_root": git_status.get("root"),
@@ -245,6 +258,7 @@ def snapshot_state() -> dict[str, Any]:
             "git": git_status,
             "git_branches": git_branches,
             "git_tree": git_tree,
+            "git_log": git_log,
             "terminal_available": terminal_available,
             "current_workspace": workspace_path,
         },
@@ -366,6 +380,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         "action_id": action_id,
                         "result": result,
                     })
+
+                    # Push a fresh snapshot right after state-changing actions so
+                    # the phone reflects the result immediately (no manual refresh).
+                    if _is_state_changing_action(action_id):
+                        await manager.broadcast_json(
+                            {"type": "telemetry", "payload": snapshot_state()}
+                        )
 
         except WebSocketDisconnect:
             logging.info("WebSocket disconnected")
