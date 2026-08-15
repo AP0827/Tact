@@ -1,1 +1,52 @@
 docs/PRODUCT_SPEC.md
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flutter/Dart generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# macOS
+.DS_Store
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# IDE
+.idea/
+*.iml
+
+# Android
+.gradle/
+android/.gradle/
+android/build/
+
+# iOS / macOS
+ios/Pods/
+macos/Pods/
+macos/Flutter/ephemeral/
+
+# OS
+.DS_Store

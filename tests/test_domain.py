@@ -54,14 +54,18 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.unpair_device("dev-1"))
         self.assertFalse(config.is_paired("dev-1"))
 
-    def test_no_persistence_across_instances(self):
+    def test_persistence_across_instances(self):
         config = Config(self.path)
         config.generate_pairing_token()
         config.consume_pairing_token(config._data["pairing_token"])
         config.pair_device("dev-1", "Phone")
 
         config2 = Config(self.path)
-        self.assertEqual(len(config2.list_devices()), 0)
+        devices = config2.list_devices()
+
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(devices[0].device_id, "dev-1")
+        self.assertEqual(devices[0].label, "Phone")
 
     def test_create_and_approve_pending_pairing(self):
         config = Config(self.path)

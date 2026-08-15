@@ -49,7 +49,11 @@ async def index_html():
 async def debug_config():
     return {
         "paired_devices": [
-            {"device_id": d.device_id, "label": d.label, "last_seen": d.last_seen}
+            {
+                "device_id": d.device_id,
+                "label": d.label,
+                "last_seen": d.last_seen,
+            }
             for d in config.list_devices()
         ],
         "pending_pairings": [
@@ -61,9 +65,32 @@ async def debug_config():
             }
             for p in config._data.get("pending_pairings", [])
         ],
-        "pairing_token_exists": config._data.get("pairing_token") is not None,
+        "pairing_token_exists": (
+            config._data.get("pairing_token") is not None
+        ),
         "pairing_token": config._data.get("pairing_token"),
-        "pairing_token_expires": config._data.get("pairing_token_expires"),
+        "pairing_token_expires": (
+            config._data.get("pairing_token_expires")
+        ),
+    }
+
+
+@app.post("/api/debug/regenerate-otp")
+async def regenerate_otp():
+    """Generate a new 6-digit pairing OTP."""
+    otp = config.generate_pairing_token(ttl_seconds=300)
+
+    _logger.info(
+        "Pairing OTP regenerated (valid 5 min): %s",
+        otp,
+    )
+
+    return {
+        "ok": True,
+        "pairing_token": otp,
+        "pairing_token_expires": (
+            config._data.get("pairing_token_expires")
+        ),
     }
 
 
@@ -294,13 +321,51 @@ async def websocket_endpoint(websocket: WebSocket):
                 data = await websocket.receive_json()
                 if not isinstance(data, dict):
                     continue
-                if data.get("type") == "action":
+                message_type = data.get("type")
+
+                if message_type == "ping":
+                    await websocket.send_json({
+                        "type": "pong",
+                        "t": data.get("t"),
+                    })
+                    continue
+
+                if message_type == "action":
                     action_id = data.get("action_id")
+                    request_id = data.get("request_id")
                     payload = data.get("payload") or {}
-                    logging.info("received action from client: %s payload=%s", action_id, payload)
+
+                    if not action_id:
+                        await websocket.send_json({
+                            "type": "action_result",
+                            "request_id": request_id,
+                            "action_id": "",
+                            "result": {
+                                "ok": False,
+                                "error": "action_id_required",
+                            },
+                        })
+                        continue
+
+                    logging.info(
+                        "received action from client: %s payload=%s",
+                        action_id,
+                        payload,
+                    )
+
                     result = actions.execute(action_id, payload)
-                    logging.info("action result: %s", result)
-                    await websocket.send_json({"type": "action_result", "action_id": action_id, "result": result})
+
+                    logging.info(
+                        "action result: %s",
+                        result,
+                    )
+
+                    await websocket.send_json({
+                        "type": "action_result",
+                        "request_id": request_id,
+                        "action_id": action_id,
+                        "result": result,
+                    })
 
         except WebSocketDisconnect:
             logging.info("WebSocket disconnected")
