@@ -10,12 +10,16 @@ class ActionButton
   final IconData? icon;
   final Map<String, dynamic>? payload;
 
+  /// Custom handler; when provided it replaces the default sendAction call.
+  final Future<void> Function()? onPressed;
+
   const ActionButton({
     super.key,
     required this.actionId,
     required this.label,
     this.icon,
     this.payload,
+    this.onPressed,
   });
 
   @override
@@ -35,12 +39,16 @@ class _ActionButtonState
     });
 
     try {
-      await ref
-          .read(tactClientProvider)
-          .sendAction(
-            widget.actionId,
-            widget.payload,
-          );
+      if (widget.onPressed != null) {
+        await widget.onPressed!();
+      } else {
+        await ref
+            .read(tactClientProvider)
+            .sendAction(
+              widget.actionId,
+              widget.payload,
+            );
+      }
     } catch (e) {
       if (!mounted) return;
 

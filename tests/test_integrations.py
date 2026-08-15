@@ -137,9 +137,6 @@ class VSCodeIntegrationTests(unittest.TestCase):
         import types
         from pathlib import Path
 
-        integration = VSCodeIntegration()
-        integration._which = lambda cmd: cmd == "code" and "/usr/bin/code"
-
         mock_psutil = types.ModuleType("psutil")
         mock_proc = type("Proc", (), {
             "info": {
@@ -157,6 +154,9 @@ class VSCodeIntegrationTests(unittest.TestCase):
                 project_dir = Path(tmp) / "project"
                 project_dir.mkdir()
                 mock_proc.info["cmdline"] = ["code", str(project_dir)]
+
+                integration = VSCodeIntegration(config_dir=Path(tmp) / "config")
+                integration._which = lambda cmd: cmd == "code" and "/usr/bin/code"
 
                 with patch.object(Path, "is_dir", return_value=True):
                     result = integration.workspaces()
