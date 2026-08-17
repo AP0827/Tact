@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import psutil
 import shutil
 from pathlib import Path
 from typing import Any, Optional
@@ -19,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 manager = ConnectionManager()
 actions = ActionRegistry()
-monitor = StateMonitor(actions.event_bus)
+monitor = StateMonitor(actions.event_bus, actions.integrations)
 config = Config()
 
 _otp = config.generate_pairing_token()
@@ -228,12 +227,17 @@ def _current_workspace_path() -> str:
 def _is_state_changing_action(action_id: str) -> bool:
     """Actions that mutate state we snapshot — the phone should refresh after."""
     return action_id.startswith(
-        ("git.", "media.", "system.set_workspace", "vscode.open_workspace")
+        ("git.", "media.", "system.set_workspace", "vscode.open_workspace",
+         "docker.", "clipboard.", "context.")
     )
 
 
 def snapshot_state() -> dict[str, Any]:
+    """Compose the state snapshot from every integration's `snapshot()`."""
     workspace_path = _current_workspace_path()
+    for integration in actions.integrations:
+        if hasattr(integration, "workspace_path"):
+            integration.workspace_path = workspace_path
     current_root = actions.git.discover_root(workspace_path)
     git_status = actions.git.status(current_root) if current_root else {"available": False, "root": None}
     git_branches = actions.git.branches(current_root) if current_root else {"available": False, "branches": [], "current": None}
@@ -242,28 +246,26 @@ def snapshot_state() -> dict[str, Any]:
     vscode_status = actions.vscode.status(current_root)
     vscode_workspaces = actions.vscode.workspaces()
     terminal_available = bool(shutil.which("gnome-terminal") or shutil.which("konsole") or shutil.which("kitty") or shutil.which("alacritty") or shutil.which("xfce4-terminal"))
-    return {
-        "system": {
-            "cpu": psutil.cpu_percent(interval=None),
-            "memory": psutil.virtual_memory().percent,
-            "disk": psutil.disk_usage(str(Path.cwd())).percent if Path.cwd().exists() else None,
-            "volume": actions.system.volume().get("volume"),
-        },
-        "media": actions.media.status(),
-        "workspace": {
-            "cwd": str(Path.cwd()),
-            "git_root": git_status.get("root"),
-            "vscode": vscode_status,
-            "vscode_workspaces": vscode_workspaces,
-            "git": git_status,
-            "git_branches": git_branches,
-            "git_tree": git_tree,
-            "git_log": git_log,
-            "terminal_available": terminal_available,
-            "current_workspace": workspace_path,
-        },
-        "actions": sorted(actions._registry.keys()),
+
+    state: dict[str, Any] = {
+        integration.name: integration.snapshot()
+        for integration in actions.integrations
     }
+    # Workspace is a cross-integration view (git + vscode), assembled here.
+    state["workspace"] = {
+        "cwd": str(Path.cwd()),
+        "git_root": git_status.get("root"),
+        "vscode": vscode_status,
+        "vscode_workspaces": vscode_workspaces,
+        "git": git_status,
+        "git_branches": git_branches,
+        "git_tree": git_tree,
+        "git_log": git_log,
+        "terminal_available": terminal_available,
+        "current_workspace": workspace_path,
+    }
+    state["actions"] = sorted(actions._registry.keys())
+    return state
 
 
 @app.websocket("/ws")
@@ -311,7 +313,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 while True:
                     await asyncio.sleep(5)
                     try:
-                        await ws.send_json({"type": "telemetry", "payload": snapshot_state()})
+                        # snapshot_state runs subprocesses (git, docker,
+                        # playerctl…) — offload so the event loop stays free.
+                        payload = await asyncio.to_thread(snapshot_state)
+                        await ws.send_json({"type": "telemetry", "payload": payload})
                     except Exception:
                         break
 
@@ -326,6 +331,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
             actions.event_bus.subscribe("git.state_changed", on_event)
             actions.event_bus.subscribe("vscode.state_changed", on_event)
+            actions.event_bus.subscribe("docker.state_changed", on_event)
+            actions.event_bus.subscribe("context.changed", on_event)
 
             telemetry_task = asyncio.create_task(telemetry_loop(websocket))
             if not hasattr(app.state, "monitor_task") or app.state.monitor_task.done():
@@ -367,7 +374,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         payload,
                     )
 
-                    result = actions.execute(action_id, payload)
+                    # Offloaded so slow subprocess actions (docker, git,
+                    # playerctl) don't block the event loop / other clients.
+                    result = await asyncio.to_thread(actions.execute, action_id, payload)
 
                     logging.info(
                         "action result: %s",
@@ -384,8 +393,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Push a fresh snapshot right after state-changing actions so
                     # the phone reflects the result immediately (no manual refresh).
                     if _is_state_changing_action(action_id):
+                        payload = await asyncio.to_thread(snapshot_state)
                         await manager.broadcast_json(
-                            {"type": "telemetry", "payload": snapshot_state()}
+                            {"type": "telemetry", "payload": payload}
                         )
 
         except WebSocketDisconnect:

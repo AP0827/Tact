@@ -4,12 +4,99 @@ import os
 import shutil
 import subprocess
 import sys
+import webbrowser
 from pathlib import Path
 from typing import Any, Optional
 
+from ..base import Integration, payload_str
 
-class SystemIntegration:
+try:
+    import psutil
+except ImportError:  # pragma: no cover
+    psutil = None
+
+
+class SystemIntegration(Integration):
     """Platform-aware system actions with OS isolation."""
+
+    name = "system"
+
+    def actions(self) -> dict[str, Any]:
+        return {
+            "open_url": lambda p: self.open_url(payload_str(p, "url")),
+            "open_terminal": lambda p: self.open_terminal(payload_str(p, "path")),
+            "open_project": lambda p: self.open_project(payload_str(p, "path")),
+            "volume": lambda p: self.volume(payload_str(p, "value")),
+            "volume_up": lambda p: self.volume_up(),
+            "volume_down": lambda p: self.volume_down(),
+            "mute": lambda p: self.mute(),
+            "lock_screen": lambda p: self.lock_screen(),
+            "screenshot": lambda p: self.screenshot(),
+            "battery": lambda p: self.battery(),
+        }
+
+    def snapshot(self) -> dict[str, Any]:
+        """CPU / memory / disk / volume / battery for the phone."""
+        try:
+            cpu = psutil.cpu_percent(interval=None) if psutil else None
+        except Exception:
+            cpu = None
+        try:
+            memory = psutil.virtual_memory().percent if psutil else None
+        except Exception:
+            memory = None
+        try:
+            disk = (
+                psutil.disk_usage(str(Path.cwd())).percent
+                if psutil and Path.cwd().exists()
+                else None
+            )
+        except Exception:
+            disk = None
+        volume = self.volume().get("volume") if self.volume().get("ok") else None
+        return {
+            "cpu": cpu,
+            "memory": memory,
+            "disk": disk,
+            "volume": volume,
+            "battery": self.battery(),
+        }
+
+    def open_url(self, url: str) -> dict[str, Any]:
+        """Open a URL in the default browser."""
+        if not url or not url.startswith(("http://", "https://")):
+            return {"ok": False, "error": "invalid_url"}
+        if sys.platform.startswith("linux"):
+            env = dict(os.environ)
+            try:
+                uid = str(os.getuid())
+                fallback = f"/run/user/{uid}"
+                if "XDG_RUNTIME_DIR" not in env and os.path.isdir(fallback):
+                    env["XDG_RUNTIME_DIR"] = fallback
+            except Exception:
+                pass
+
+            devnull = subprocess.DEVNULL
+            if shutil.which("gio"):
+                try:
+                    subprocess.Popen(
+                        ["gio", "open", url],
+                        stdout=devnull,
+                        stderr=devnull,
+                        env=env,
+                        start_new_session=True,
+                    )
+                    return {"opened": url, "method": "gio"}
+                except Exception:
+                    pass
+
+        # Last resort: Python's webbrowser (may use kde-open internally).
+        try:
+            opened = webbrowser.open(url)
+            return {"opened": url, "method": "webbrowser", "reported": bool(opened)}
+        except Exception:
+            pass
+        return {"opened": url, "method": "none"}
 
     def _xdg_open(self, target: str) -> dict[str, Any]:
         if sys.platform.startswith("linux"):
@@ -192,6 +279,23 @@ class SystemIntegration:
             return {"opened": str(target), "method": file_manager}
         except Exception as exc:
             return {"opened": str(target), "ok": False, "error": str(exc)}
+
+    def battery(self) -> dict[str, Any]:
+        """Battery level (0..100), charging state, and power plugged in."""
+        if psutil is None:
+            return {"ok": False, "error": "psutil_not_available"}
+        try:
+            battery = psutil.sensors_battery()
+        except (AttributeError, OSError):
+            return {"ok": False, "error": "battery_not_supported"}
+        if battery is None:
+            return {"ok": False, "error": "no_battery_found"}
+        return {
+            "ok": True,
+            "percent": round(battery.percent, 1),
+            "charging": bool(battery.power_plugged),
+            "secs_left": battery.secsleft if battery.secsleft != -1 else None,
+        }
 
     def _run_platform_command(
         self,

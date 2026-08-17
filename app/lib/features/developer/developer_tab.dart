@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/connection_provider.dart';
 import '../../state/telemetry_provider.dart';
+import '../docker/docker_card.dart';
 
 /// Unified Developer section: pick a repository, then run git operations and
 /// VS Code actions against it in one place.
@@ -225,6 +226,8 @@ class _DeveloperTabState extends ConsumerState<DeveloperTab> {
           onChanged: _selectRepo,
           onRefresh: path.isEmpty ? null : () => _refresh(path),
         ),
+        const SizedBox(height: 16),
+        const DockerCard(),
         if (path.isNotEmpty) ...[
           const SizedBox(height: 16),
           _GitOpsCard(

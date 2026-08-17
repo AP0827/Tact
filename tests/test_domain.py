@@ -157,7 +157,7 @@ class SystemIntegrationTests(unittest.TestCase):
 class ActionRegistrySystemTests(unittest.TestCase):
     def test_registry_contains_new_actions(self):
         registry = ActionRegistry()
-        expected = {
+        self.assertEqual(set(registry._registry.keys()), {
             "system.open_url",
             "system.volume_up",
             "system.volume_down",
@@ -168,6 +168,7 @@ class ActionRegistrySystemTests(unittest.TestCase):
             "system.open_project",
             "system.set_workspace",
             "system.volume",
+            "system.battery",
             "vscode.open_workspace",
             "vscode.status",
             "vscode.workspaces",
@@ -176,7 +177,7 @@ class ActionRegistrySystemTests(unittest.TestCase):
             "git.tree",
             "git.log",
             "git.add",
-            "git._switch_branch",
+            "git.switch_branch",
             "git.pull",
             "git.push",
             "git.commit",
@@ -187,8 +188,19 @@ class ActionRegistrySystemTests(unittest.TestCase):
             "media.volume",
             "media.seek",
             "media.open_spotify",
-        }
-        self.assertEqual(set(registry._registry.keys()), expected)
+            "docker.status",
+            "docker.start",
+            "docker.stop",
+            "docker.restart",
+            "docker.logs",
+            "clipboard.get",
+            "clipboard.set",
+            "clipboard.status",
+            "clipboard.clear_history",
+            "context.status",
+            "context.override",
+            "context.clear_override",
+        })
 
     def test_unknown_action_returns_error(self):
         registry = ActionRegistry()

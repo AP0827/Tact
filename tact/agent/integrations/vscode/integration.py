@@ -7,10 +7,50 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Optional
 
+from ..base import Integration, payload_str
 
-class VSCodeIntegration:
+
+class VSCodeIntegration(Integration):
+    name = "vscode"
+
     def __init__(self, config_dir: Optional[Path] = None):
         self._config_dir_override = config_dir
+
+    def actions(self) -> dict[str, Any]:
+        return {
+            "open_workspace": lambda p: self.open_workspace(payload_str(p, "path")),
+            "status": lambda p: self.status(payload_str(p, "path")),
+            "workspaces": lambda p: self.workspaces(),
+        }
+
+    def snapshot(self) -> dict[str, Any]:
+        workspaces = self.workspaces()
+        return {
+            "available": workspaces.get("available", False),
+            "running": workspaces.get("running", False),
+            "command": self.resolve_command(),
+            "workspaces": workspaces.get("workspaces", []),
+            "count": workspaces.get("count", 0),
+        }
+
+    def monitor(self, event_bus) -> None:
+        """Emit `vscode.state_changed` when running state changes."""
+        current = {
+            "running": self.is_running(),
+            "available": self.is_available(),
+        }
+        if current != self._last_state:
+            if self._last_state is not None:
+                event_bus.emit_simple(
+                    "vscode.state_changed",
+                    "vscode",
+                    "VS Code",
+                    "running" if current["running"] else "stopped",
+                    current,
+                )
+            self._last_state = current
+
+    _last_state: dict | None = None
 
     def resolve_command(self) -> Optional[str]:
         for candidate in ("code", "code-insiders", "codium"):

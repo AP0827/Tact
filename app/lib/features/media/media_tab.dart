@@ -21,6 +21,7 @@ class _MediaTabState extends ConsumerState<MediaTab> {
   String? _selectedPlayer;
   final Set<String> _busyActions = {};
   double? _systemVolume;
+  bool _volumeDragging = false;
   double? _position;
 
   void _snack(String message) {
@@ -34,7 +35,8 @@ class _MediaTabState extends ConsumerState<MediaTab> {
       final client = ref.read(tactClientProvider);
       await client.sendAction(action, {'player': _selectedPlayer});
       HapticFeedback.lightImpact();
-      await client.sendAction('media.status');
+      // No manual refresh needed: the agent re-broadcasts a fresh snapshot
+      // right after state-changing actions.
     } catch (e) {
       _snack('$e');
     } finally {
@@ -43,11 +45,14 @@ class _MediaTabState extends ConsumerState<MediaTab> {
   }
 
   Future<void> _setVolume(double value) async {
+    setState(() {
+      _systemVolume = value;
+      _volumeDragging = false;
+    });
     try {
       await ref
           .read(tactClientProvider)
           .sendAction('system.volume', {'value': value.round()});
-      setState(() => _systemVolume = value);
     } catch (e) {
       _snack('$e');
     }
@@ -146,10 +151,13 @@ class _MediaTabState extends ConsumerState<MediaTab> {
 
     final system = (state?['system'] as Map?)?.cast<String, dynamic>();
     final sysVolume = (system?['volume'] as num?)?.toDouble();
-    _systemVolume ??= sysVolume;
     _position ??= position ?? 0.0;
 
-    final currentVolume = (_systemVolume ?? 0.0).clamp(0, 100).toDouble();
+    // Live volume: follow telemetry unless the user is dragging the slider
+    // (so laptop-side changes reflect on the phone).
+    final currentVolume = (_volumeDragging ? (_systemVolume ?? 0) : (sysVolume ?? _systemVolume ?? 0))
+        .clamp(0, 100)
+        .toDouble();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -290,7 +298,10 @@ class _MediaTabState extends ConsumerState<MediaTab> {
                         value: currentVolume,
                         max: 100,
                         activeColor: Theme.of(context).colorScheme.primary,
-                        onChanged: (v) => setState(() => _systemVolume = v),
+                        onChanged: (v) => setState(() {
+                          _systemVolume = v;
+                          _volumeDragging = true;
+                        }),
                         onChangeEnd: _setVolume,
                       ),
                     ),

@@ -2,36 +2,79 @@ from __future__ import annotations
 
 import os
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+from ..base import Integration, payload_int, payload_str
+from .state import GitStatus
 
-@dataclass
-class GitStatus:
-    root: str
-    branch: Optional[str]
-    commit: Optional[str]
-    changed_files: int
-    clean: bool
-    ahead: Optional[int] = None
-    behind: Optional[int] = None
-    upstream: Optional[str] = None
 
-    def as_dict(self) -> dict[str, Any]:
+class GitIntegration(Integration):
+    name = "git"
+
+    def __init__(self):
+        # Set by ActionRegistry.set_current_workspace_path; None = cwd.
+        self.workspace_path: str | None = None
+
+    def actions(self) -> dict[str, Any]:
+        """Handlers receive the payload dict; paths resolve payload-first."""
         return {
-            "root": self.root,
-            "branch": self.branch,
-            "commit": self.commit,
-            "changed_files": self.changed_files,
-            "clean": self.clean,
-            "ahead": self.ahead,
-            "behind": self.behind,
-            "upstream": self.upstream,
+            "status": lambda p: self.status(self._resolve(p)),
+            "branches": lambda p: self.branches(self._resolve(p)),
+            "tree": lambda p: self.tree(self._resolve(p), max_depth=payload_int(p, "max_depth", 3)),
+            "log": lambda p: self.log(self._resolve(p), limit=payload_int(p, "limit", 40)),
+            "add": lambda p: self.add(self._resolve(p)),
+            "pull": lambda p: self.pull(self._resolve(p), branch=payload_str(p, "branch")),
+            "push": lambda p: self.push(self._resolve(p), branch=payload_str(p, "branch")),
+            "switch_branch": lambda p: self.switch_branch(self._resolve(p), branch=payload_str(p, "branch")),
+            "commit": lambda p: self.commit(str(payload_str(p, "message") or ""), self._resolve(p)),
         }
 
+    def _resolve(self, payload: dict) -> str | None:
+        path = payload_str(payload, "path")
+        if path:
+            return path
+        return self.workspace_path
 
-class GitIntegration:
+    def snapshot(self) -> dict[str, Any]:
+        root = self.discover_root(self.workspace_path)
+        if root is None:
+            return {"available": False, "root": None}
+        status = self.status(root)
+        if not status.get("available"):
+            return status
+        return {
+            "available": True,
+            "root": status["root"],
+            "branch": status["branch"],
+            "commit": status["commit"],
+            "clean": status["clean"],
+            "changed_files": status["changed_files"],
+            "ahead": status["ahead"],
+            "behind": status["behind"],
+        }
+
+    def monitor(self, event_bus) -> None:
+        """Emit `git.state_changed` when branch/dirtiness changes."""
+        current = self.snapshot()
+        if not current.get("available"):
+            return
+        key = (current.get("branch"), current.get("clean"), current.get("changed_files"))
+        if key != self._last_state:
+            if self._last_state is not None:
+                event_bus.emit_simple(
+                    "git.state_changed",
+                    "git",
+                    f"Git: {current.get('branch')}",
+                    f"{current.get('changed_files')} files changed"
+                    if not current.get("clean")
+                    else "clean",
+                    current,
+                )
+            self._last_state = key
+
+    _last_state: tuple | None = None
+
     def discover_root(self, start_path: str | Path | None = None) -> Optional[Path]:
         candidate = Path(start_path or os.getcwd()).resolve()
         if candidate.is_file():
@@ -90,11 +133,22 @@ class GitIntegration:
         commits = [line for line in output.splitlines() if line.strip()]
         return {"available": True, "commits": commits, "root": str(root)}
 
-    def pull(self, start_path: str | Path | None = None) -> dict[str, Any]:
-        return self._run_git_action(start_path, ["pull", "--ff-only"])
+    def pull(self, start_path: str | Path | None = None, branch: Optional[str] = None) -> dict[str, Any]:
+        args = ["pull", "--ff-only"]
+        if branch:
+            args.append(branch)
+        return self._run_git_action(start_path, args)
 
-    def push(self, start_path: str | Path | None = None) -> dict[str, Any]:
-        return self._run_git_action(start_path, ["push"])
+    def push(self, start_path: str | Path | None = None, branch: Optional[str] = None) -> dict[str, Any]:
+        args = ["push"]
+        if branch:
+            args += ["origin", branch]
+        return self._run_git_action(start_path, args)
+
+    def switch_branch(self, start_path: str | Path | None = None, branch: Optional[str] = None) -> dict[str, Any]:
+        if not branch:
+            return {"ok": False, "error": "branch_required"}
+        return self._run_git_action(start_path, ["checkout", branch])
 
     def commit(self, message: str, start_path: str | Path | None = None) -> dict[str, Any]:
         return self._run_git_action(start_path, ["commit", "-am", message])
