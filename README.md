@@ -329,25 +329,3 @@ python3 -m pytest tests/ -q        # agent unit tests (43 passing)
 cd app && flutter test             # Flutter widget smoke test
 ```
 
-## Color scheme
-
-The clients use a dark "instrument cluster" theme inspired by automotive HUDs:
-- Background: `#0a0e14` (near-black graphite)
-- Surface: `#121821`
-- Primary: `#2fd3e8` (electric cyan)
-- Accent: `#f07316` (amber-orange warning)
-- Status: green (ok/playing), amber (busy), red `#ff4d5e` (critical)
-
-The System tab renders CPU/RAM/disk as circular gauges, the Media tab
-now-playing card uses a scrolling marquee, and the context banner sits above
-all tabs.
-
-## Roadmap
-
-The full roadmap lives in `docs/PHASE_TRACKER.md` (phases 0–14, per-item
-status, priorities). In brief: the Context Engine (phase 2) is live; next is
-phase 3 — application surfaces / profiles (contextual action sets per app,
-app launcher, window/workspace controls, project workspace), then the
-persistent control strip, glanceable state, and actionable events. Every
-phase builds on the same integration pattern: one folder + one registry line
-per capability.
