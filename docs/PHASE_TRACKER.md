@@ -1,6 +1,6 @@
 # Tact — Phase-by-Phase Project Tracker
 
-Merged roadmap combining **PRODUCT_SPEC.md** (architectural phases, definitions of done, gates), **PRIORITY_FEATURES.md** (practical build order, priorities, version grouping), and the **Tact Surface** concept (context-first UI modeled on Apple's Touch Bar interaction model).
+Merged roadmap combining **PRODUCT_SPEC.md** (architectural phases, definitions of done, gates), **PRIORITY_FEATURES.md** (practical build order, priorities, version grouping), the **Tact Surface** concept (context-first UI modeled on Apple's Touch Bar interaction model), and **Stream Deck user-research reviews** (how people actually use physical macro-keypads — app profiles, window/workspace control, project pages, snippets, multi-action workflows).
 
 ## Status legend
 
@@ -120,22 +120,24 @@ Active App + Project + Current State + Recent Events → TACT SURFACE
 | 0 | Foundation / Proof of Concept | V0.1 | COMPLETE | S |
 | 1 | Developer Control Surface | V0.1 | ~95% complete | S |
 | 2 | Context Engine | V0.2 | ~80% complete | S |
-| 3 | Contextual Controls (context surfaces) | V0.3 | Not started | S |
+| 3 | Application Surfaces / Profiles (Contextual Controls) | V0.3 | ~10% complete | S |
 | 4 | Persistent Control Strip | V0.4 | ~40% complete | A |
-| 5 | Glanceable Developer State | V0.5 | ~50% complete | S |
+| 5 | Glanceable State | V0.5 | ~50% complete | S |
 | 6 | Actionable Events / Attention | V0.5 | ~30% complete | S |
-| 7 | Clipboard / Quick Capture | V0.6 | ~50% complete | A+ |
-| 8 | Developer Workflows | V0.7 | Not started | C+ |
-| 9 | Deep Developer Integrations | V0.8 | Not started | B+ |
+| 7 | Clipboard / Snippets / Quick Capture | V0.6 | ~50% complete | A+ |
+| 8 | Workflows & Macros | V0.7 | Not started | A |
+| 9 | Deep Integrations: Remote Control + External Devices | V0.8 | Not started | B+ |
 | 10 | Glanceability / Widgets / Lock screen | V0.9 | Not started | B |
 | 11 | Plugin / Customization Platform | V1.0 | Not started | D |
 | 12 | AI Workspace Generation + Assistant | V1.1 | Not started | E |
 | 13 | Productization (beta / commercial / cloud) | V1.2 | Not started | — |
 | 14 | Physical Tact Hardware | V2.0 | Not started | — |
 
-**Current position:** Phases 0–1 complete; **Phase 2 Context Engine ~80% done** (detection, project/branch resolution, workflow map, override, `context.changed`, phone banner — all live). Next: Phase 2 signal aggregation → **Phase 3 Contextual Controls** (surface switching), the identity-defining work per the Tact Surface model.
+**Current position:** Phases 0–1 complete; **Phase 2 Context Engine ~80% done** (detection, project/branch resolution, workflow map, override, `context.changed`, phone banner — all live). Next: Phase 2 signal aggregation → **Phase 3 Application Surfaces** (surface switching + app launcher + window/workspace control + project workspace), the identity-defining work per the Tact Surface model.
 
 **Modularity note (built into Phase 2 work):** the agent runs on the Integration pattern with **folder-per-app separation** — `integrations/<name>/` (integration.py + helper files like state.py/apps.py/detection.py) registered explicitly in `ActionRegistry`, generic `StateMonitor`. Adding a capability (figma, video editing) is one new folder + one registry line; see `tact/agent/integrations/README.md`.
+
+**Stream Deck research note (applies to Phases 3–10):** reviews show users treat their keypad as an *extension of the desktop* — app profiles, arranging windows across monitors, project pages that open everything at once, one-tap snippets, and multi-action buttons. Tact's phone form factor beats a physical device on exactly these: it can carry full project/workspace state and act on it remotely. Additions from this research are marked with 🎛 in the phase tables below.
 
 ---
 
@@ -282,21 +284,33 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 
 ---
 
-## PHASE 3 — CONTEXTUAL CONTROLS (CONTEXT SURFACES)
+## PHASE 3 — APPLICATION SURFACES / PROFILES (CONTEXTUAL CONTROLS)
 
-**Sources:** PRODUCT_SPEC §10.2, §11 · PRIORITY_FEATURES Phase 1, 5 · Tact Surface concept #1, #5
+**Sources:** PRODUCT_SPEC §10.2, §11 · PRIORITY_FEATURES Phase 1, 5 · Tact Surface concept #1, #5 · Stream Deck research (app profiles, window/workspace control, project pages)
 
 **Priority: S.** Five excellent contexts are more valuable than 50 mediocre ones.
 
-**Goal:** The Context Surface layer — controls change with the active app. Each surface = a set of actions + a state card, rendered when the matching context is active.
+**Goal:** The Context Surface layer — controls change with the active app. Each surface = a profile: a set of actions + a state card, rendered when the matching context is active. Profiles may be **auto-switched** by the Context Engine, **manually pinned** via `context.override`, or **nested** (application → project → workflow).
+
+```text
+VS Code        Blender        Photoshop        Teams
+├── Run        ├── Render     ├── Undo         ├── Mute
+├── Debug      ├── Play       ├── Brush        ├── Camera
+├── Test       ├── Camera     ├── Export       ├── Share
+├── Terminal   ├── Save       ├── Save         └── Leave
+└── Git
+```
 
 ### 3.1 Surface framework (shared)
 
 | Status | Item |
 | ------ | ---- |
-| [ ] | **Surface registry** — Map `context_id → surface definition` (title, action buttons, state widget). Shared across all contexts so adding Chrome ≠ copying code. |
-| [ ] | **Surface widget** — A Flutter widget that renders the active surface: action grid + optional state card (build/tests/git per context). |
+| [ ] | **Surface registry** — Map `context_id → profile` (title, action buttons, state widget). Shared across all contexts so adding Chrome ≠ copying code. |
+| [ ] | **Surface widget** — A Flutter widget that renders the active profile: action grid + optional state card (build/tests/git per context). |
 | [ ] | **Fallback surface** — For unknown apps, show generic system controls (volume, lock, screenshot, open terminal) so the surface is never empty. |
+| [~] | **Manual pin** — `context.override` / `context.clear_override` already pin a profile from the phone (Context Engine, Phase 2); wire it to surface selection. |
+| [ ] | **Per-app action sets** — Each profile defines its own action list (VS Code: Run/Debug/Test; Teams: Mute/Camera/Share/Leave); unknown apps get the fallback. |
+| [ ] | **Per-app state cards** — Each profile binds a state card (VS Code: build ✓; Chrome: active tab; Teams: meeting state). |
 
 ### 3.2 VS Code surface
 
@@ -336,8 +350,8 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 | Status | Item | Description |
 | ------ | ---- | ----------- |
 | [x] | Previous / Play-Pause / Next | Reuse `media.previous/play_pause/next` (playerctl **with xdotool media-key fallback** — snap Spotify's MPRIS registration drops intermittently; XF86Audio keys keep working). |
-| [ ] | Volume | Reuse `system.volume` / `media.volume` slider (already implemented). |
-| [ ] | State card | Now-playing title/artist + position (already in `media.status` details). |
+| [x] | Volume | Reuse `system.volume` / `media.volume` slider (already implemented). |
+| [~] | State card | Now-playing title/artist + position (already in `media.status` details; Media tab shows it — move into the Spotify profile). |
 
 ### 3.6 Teams surface
 
@@ -357,7 +371,78 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 | [ ] | Swipe to dismiss event | Swipe an attention event away (marks read, does not dismiss the underlying state). |
 | [ ] | Drag sliders | Volume/brightness/seek are drag sliders (volume already is; ensure brightness + seek match). |
 
-**Status: NOT STARTED**
+### Physical Stream Deck → Tact translation (interaction model)
+
+Stream Deck+ users value the **knobs**; Tact replaces them with touch gestures, not physical controls:
+
+| Stream Deck hardware | Tact equivalent |
+| -------------------- | --------------- |
+| Button | Action tile |
+| Button screen/icon | Dynamic state card |
+| Folder | Surface / nested surface |
+| Profile | Application / project surface |
+| Knob | Slider / drag gesture |
+| Knob press | Tap |
+| Swipe | Context / media navigation |
+| Multi-action | Workflow (Phase 8) |
+| Virtual Stream Deck | Tact itself |
+
+Implications for Phase 3/4 (extend the existing interaction model, don't invent a new feature):
+
+| Status | Item |
+| ------ | ---- |
+| [x] | Volume slider (drag) — live |
+| [ ] | Brightness slider (drag) — Phase 4 |
+| [ ] | Media seek (drag on now-playing timeline) |
+| [ ] | Timeline controls (scrub) for running tasks/processes |
+| [ ] | Variable adjustment — generic drag-to-set-value action (e.g. volume, brightness, seek share one slider primitive) |
+| [ ] | Horizontal / vertical drag actions — swipe gestures that trigger actions (media prev/next, context switching) |
+
+### 3.8 🎛 Application Launcher
+
+Users use Stream Decks as an **extension of the desktop** — launching/focusing apps instead of hunting icons. Mostly a surface-level capability on top of the existing `system.open_*` actions.
+
+| Status | Item | Description |
+| ------ | ---- | ----------- |
+| [ ] | App launcher surface | Show frequently used / running applications; one tap launches or focuses the application (reuse `system.open_*` + window focus). |
+| [ ] | Recent applications | Show recently used applications dynamically (feed from Context Engine's active-app history). |
+| [ ] | App folders | Group applications into folders such as **Development**, **Communication**, **Media**, etc. |
+
+### 3.9 🎛 Window / Workspace Controls
+
+Comes from Stream Deck users who arrange applications across multiple monitors. Particularly appropriate for Tact: **the phone controls layout without being physically beside the computer.**
+
+| Status | Item | Description |
+| ------ | ---- | ----------- |
+| [ ] | Focus application | Bring an existing application window to the foreground (window activation — `wmctrl -a`, already proven for `open_spotify`). |
+| [ ] | Move window | Move the active/running window to a selected monitor/workspace (`wmctrl -r -e` / `-o`). |
+| [ ] | Window layout presets | Save layouts such as **Coding / Meeting / Media** (list of window placements). |
+| [ ] | Workspace preset | One tap opens/focuses the applications belonging to a workspace. |
+| [ ] | Minimize / maximize / close | Basic window actions (`wmctrl -r -b add,hidden` / `-b add,maximized_vert,maximized_horz` / `-c`). |
+
+### 3.10 🎛 Project Workspace
+
+Stream Deck "project pages" open all the files, applications and tools associated with a project. One tap means: **"put me back into my Tact development environment."**
+
+```text
+TACT
+├── VS Code
+├── Terminal
+├── Chrome → localhost:3000
+├── Docker
+├── GitHub
+├── Project folder
+```
+
+| Status | Item | Description |
+| ------ | ---- | ----------- |
+| [ ] | Project launcher | Select a project and open its associated applications/files/tools. |
+| [ ] | Project resources | Show repository, VS Code workspace, terminal, browser, Docker and relevant folders for the active project. |
+| [ ] | Project commands | Expose commands associated with that project (run, test, build, deploy — from the project's detected toolchain). |
+| [ ] | Project surface | When a project is active, show its relevant actions rather than generic app actions (nested under the application profile). |
+| [ ] | Project presets | Save a project-specific workspace configuration. |
+
+**Status: ~10% COMPLETE** — Spotify transport + volume live; profile framework, app launcher, window/workspace control, project workspace pending.
 
 ---
 
@@ -365,7 +450,7 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 
 **Sources:** PRODUCT_SPEC §11 · PRIORITY_FEATURES Phase 4–5, Iteration C (ranks 9, 10, 11, 12, 14) · Tact Surface concept #2
 
-**Priority: A.** Small persistent bottom strip, always visible on every surface.
+**Priority: A.** Small persistent bottom strip, always visible on every surface. **The strip stays small — no 20-button walls.** Only frequent, cross-app controls live here.
 
 **Goal:** System controls that never change context — the Control Strip. **Media controls move out of their own nav tab into this strip.**
 
@@ -381,31 +466,46 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 | [ ] | Dim | Reduce screen brightness below hardware minimum (xrandr overlay). |
 | [ ] | Expandable sheets | Tap a strip item → bottom sheet with the full control (volume: slider + mute; brightness: slider; media: full transport + seek). |
 
-### 4.2 Open / focus applications
+### 4.2 🎛 Quick app switcher
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Open app list | Quick-open row (VS Code, Chrome, Terminal, Spotify, Teams, Docker) via existing `system.open_*` actions. |
-| [ ] | Focus window | Bring a running app to foreground (window activation, not just launch). |
+| [ ] | Pinned apps row | Persistent access to a few pinned applications (small row in the strip, launch or focus via `system.open_*` + window focus). |
+| [ ] | Recent-app rotation | Optionally rotate in the most recently used app from Context Engine history. |
 
-**Status: ~40% COMPLETE** — volume done; media partially done (needs relocation); brightness/lock/screenshot/dim need strip UI.
+### 4.3 🎛 Audio output switcher
+
+From the review mentioning switching between audio devices (headphones ↔ speakers ↔ Bluetooth).
+
+| Status | Item | Description |
+| ------ | ---- | ----------- |
+| [ ] | Audio output device switching | List sink devices (`pactl list short sinks`) + one-tap switch (Bluetooth headset → speakers → HDMI). |
+| [ ] | Microphone device switching | Same for sources (`pactl list short sources`) — Phase 9 external controls too. |
+
+**Status: ~40% COMPLETE** — volume done; media partially done (needs relocation); brightness/lock/screenshot/dim need strip UI; app switcher + audio output switcher pending.
 
 ---
 
-## PHASE 5 — GLANCEABLE DEVELOPER STATE
+## PHASE 5 — GLANCEABLE STATE
 
-**Sources:** PRODUCT_SPEC §8–9 · PRIORITY_FEATURES Phase 2, Iteration B (ranks 2, 3, 4, 6, 19) · Tact Surface concept #3
+**Sources:** PRODUCT_SPEC §8–9 · PRIORITY_FEATURES Phase 2, Iteration B (ranks 2, 3, 4, 6, 19) · Tact Surface concept #3 · Stream Deck research (users want to know *whether something is happening*, not raw telemetry)
 
 **Priority: S.** The "mini display" — workspace health always visible at the top.
 
-**Goal:** The developer glances and immediately knows: *everything is fine* or *something broke*.
+**Goal:** The developer glances and immediately knows: *everything is fine* or *something broke* — and the top of Tact stays useful **outside pure development** (meetings, media, away-from-desk).
 
-### 5.1 Workspace state layer
+### 5.1 Glanceable state layer
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
+| [x] | Active application | Current focused app — live via Context Engine (`snapshot.context.active_app`, phone banner). |
+| [x] | Active project | Current project/workspace — live via Context Engine (`snapshot.context.project/branch`, phone banner). |
 | [x] | Git state | branch, clean/dirty, ahead/behind (in snapshot). |
 | [x] | Battery state | level + charging in `system.battery` (snapshot + System tab chip). |
+| [ ] | Running tasks | Builds, scripts, downloads, training jobs, etc. with status + elapsed (feeds from Phase 9 process monitor / terminal jobs). |
+| [~] | Media state | Currently playing/paused media — data live (`media.status`); glanceable card pending (Media tab only today). |
+| [ ] | Meeting state | Current meeting / muted / camera / sharing state when applicable (feeds from Phase 9 meeting controls). |
+| [~] | Connection state | Laptop online/offline — pairing `last_seen` exists; phone-side "online / updated Xs ago" indicator pending. |
 | [ ] | Build state | ✓ PASS / ✕ FAILED / ● RUNNING + last run time. Feed from VS Code task output (Phase 1/3) or a shell runner. |
 | [ ] | Test state | `124/124` + failed counts. Feed from test runner output parsing. |
 | [~] | Docker state | Per-container ● running / ✕ stopped / ⚠ restarting — data live (`docker.status`), glanceable widget pending. |
@@ -420,7 +520,7 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 | [ ] | State-diff broadcasting | Only push changed state sections to reduce bandwidth (state-changing actions already re-broadcast). |
 | [ ] | Staleness indicator | Show "updated Xs ago" so the developer trusts the data. |
 
-**Status: ~40% COMPLETE** — git state + snapshot exist; build/test/docker/CI state widgets pending.
+**Status: ~50% COMPLETE** — context (app/project/branch) + git + battery + media data live; running tasks / meeting / connection / build / test / CI widgets pending.
 
 ---
 
@@ -445,6 +545,10 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 | [ ] | build.started / succeeded / failed | Hook into VS Code task execution (Phase 3) and any build invocation. |
 | [ ] | tests.started / passed / failed | Hook into test runner invocations; parse summary output for counts. |
 | [ ] | container.started / stopped / failed | Docker event subscription (`docker events`) — container *state* events already live via `docker.state_changed`. |
+| [ ] | process.exited | Notify when a **monitored process stops unexpectedly** (Phase 9 process monitor — e.g. dev server, database). |
+| [ ] | download.completed | Detect completed downloads (directory scan / `inotify`) → `[OPEN FOLDER] [OPEN FILE] [DISMISS]`. |
+| [ ] | meeting.started | Meeting window/process detected (Teams/Zoom/Slack call) → offer meeting controls. |
+| [ ] | application.state_changed | Surface relevant controls when an app becomes active — `context.changed` **already live**; wire it to profile switching (Phase 3). |
 | [ ] | battery.low / high.resource_usage | Threshold checks in the state monitor (battery ≤ 20%, CPU/RAM sustained high). |
 | [ ] | repository.changed / branch.changed | Finer-grained git events beyond a single `state_changed`. |
 
@@ -457,64 +561,134 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 | [ ] | Attention banner | Important events surface as a dismissible banner atop the surface (severity error/warning), not just a feed row. |
 | [ ] | Feed filtering | Filter by severity / source / type. |
 | [ ] | Toast + haptics | Light feedback on attention events (mobile). |
+| [ ] | 🎛 Away notification | Task outcome pushed while the phone is away — not a mirror of desktop notifications, a *stronger* interaction: |
 
-**Status: ~30% COMPLETE** — event bus + git/vscode events + feed exist; build/test/docker events and actionable buttons pending.
+```text
+Tact build failed
+
+[ View Logs ] [ Re-run ] [ Open VS Code ]
+```
+
+**Status: ~30% COMPLETE** — event bus + git/vscode events + feed exist; build/test/docker/process/download/meeting events and actionable buttons pending.
 
 ---
 
-## PHASE 7 — CLIPBOARD / QUICK CAPTURE
+## PHASE 7 — CLIPBOARD / SNIPPETS / QUICK CAPTURE
 
-**Sources:** PRODUCT_SPEC §11 · PRIORITY_FEATURES Phase 4 (ranks 7, 25) · Tact Surface (daily utility)
+**Sources:** PRODUCT_SPEC §11 · PRIORITY_FEATURES Phase 4 (ranks 7, 25) · Tact Surface (daily utility) · Stream Deck research (comment-bank / text-template use cases, e.g. teachers reusing the same feedback)
 
 **Priority: A+.** High-frequency developer utility — potentially a killer daily-use feature.
 
+### 7.1 Clipboard
+
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [x] | Clipboard read (laptop → phone) | `clipboard.get` reads the desktop clipboard (xsel/xclip/wl-paste/pbpaste/powershell); shows current text + history in the System tab. |
-| [x] | Clipboard overwrite (phone → laptop) | `clipboard.set` writes phone text to the desktop clipboard; send box + one-tap copy-to-phone on history entries. |
+| [x] | Laptop → phone clipboard | `clipboard.get` reads the desktop clipboard (xsel/xclip/wl-paste/pbpaste/powershell); shows current text + history in the System tab. |
+| [x] | Phone → laptop clipboard | `clipboard.set` writes phone text to the desktop clipboard; send box + one-tap copy-to-phone on history entries. |
 | [x] | History (last 20, deduped) | In-agent rolling history; snapshot carries current text + history. |
 | [x] | Image clipboard detection | `capabilities()` probes X11 TARGETS via xclip; reports `image_supported` (no image transfer yet — text only). |
-| [ ] | Phone → active terminal / application | Send text via `xdotool type`/`ydotool type` into the focused app. |
-| [ ] | Quick Capture | Text capture box; send to clipboard / file / terminal / project notes. |
-| [ ] | Snippet library | Star frequently used snippets for one-tap copy. |
+| [ ] | Send clipboard item to active application | Send selected text into the focused app (`xdotool type`/`ydotool type`). |
+| [ ] | Copy selected history item directly into active application | One-tap "paste into app" from history (same mechanism, targeted at the active window). |
 
-**Status: NOT STARTED**
-
----
-
-## PHASE 8 — DEVELOPER WORKFLOWS
-
-**Sources:** PRODUCT_SPEC §11 · PRIORITY_FEATURES Phase 6 (rank 26)
-
-**Priority: C+.** Predefined developer workflows first; custom builder later. Differentiator = *developer workflows*, not "we also have macros".
+### 7.2 Snippets
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Predefined workflows | **Start Work** (open VS Code + project + Docker + terminal + browser + Spotify), **Debug Environment** (open project + terminal + docker logs + VS Code), **Meeting** (open Teams → pause Spotify → volume 40% → DND → open meeting). |
-| [ ] | Sequential action runner | Execute a list of actions with small delays; require confirmation for any destructive step. |
-| [ ] | Workflow result feedback | Show each step ✓/✕ as it runs; stop-on-error option. |
-| [ ] | Custom command builder (later) | Compose new workflows from registered actions. |
+| [ ] | Pinned snippets | Star frequently used snippets for one-tap copy. |
+| [ ] | Snippet folders | Organize snippets into folders (Development, Communication, Templates…). |
+| [ ] | One-tap paste | Tap a snippet → copy to clipboard and/or type directly into the active application. |
+| [ ] | Developer command snippets | `git status`, `docker compose up`, `npm run dev`, TODO:, FIXME: |
+| [ ] | Text templates | Reusable text blocks (Email: "Thanks for reaching out…"; Teacher: "Good work… Please revise…"). |
+| [ ] | Application-specific snippets | Snippets bound to a context (`context.override` or active-app): VS Code commands, Email templates, grading comments. |
 
-**Status: NOT STARTED**
+**Status: ~50% COMPLETE** — clipboard read/write/history + image detection live; send-to-app + full snippet library pending.
 
 ---
 
-## PHASE 9 — DEEP DEVELOPER INTEGRATIONS
+## PHASE 8 — WORKFLOWS & MACROS
 
-**Sources:** PRODUCT_SPEC §11, §13.2 · PRIORITY_FEATURES Phase 7 (ranks 17, 18, 19, 21)
+**Sources:** PRODUCT_SPEC §11 · PRIORITY_FEATURES Phase 6 (rank 26) · Stream Deck research (multi-action buttons are the #1 power-user pattern)
+
+**Priority: A.** Moved up from C+ — the multi-action button is what makes a macro-keypad indispensable. **No drag-and-drop automation editor yet.** First make *button → sequence of existing Tact actions* work extremely well.
+
+**Goal:** One button executes multiple existing Tact actions sequentially — the workflow is a first-class citizen of the action registry, not a separate subsystem.
+
+| Status | Item | Description |
+| ------ | ---- | ----------- |
+| [ ] | Multi-action button | One button executes multiple actions sequentially (composed from registered Tact actions). |
+| [ ] | Action sequencing | Run actions in defined order with optional delays between steps. |
+| [ ] | Stop on failure | Stop the workflow when an action fails (configurable per workflow). |
+| [ ] | Confirmation steps | Require confirmation for destructive actions (stop containers, git reset, shutdown…). |
+| [ ] | Workflow progress | Show ✓/✕ for individual steps as it runs. |
+| [ ] | Predefined workflows | **Start Work** (open VS Code + project + Docker + terminal + browser + Spotify), **Debug Environment** (open project + terminal + docker logs + VS Code), **Meeting** (open Teams → pause Spotify → volume 40% → DND → open meeting). |
+| [ ] | Custom workflow builder (later) | User composes workflows from registered Tact actions — simple list-of-actions UI first, not a visual editor. |
+| [ ] | Application-triggered workflows (optional, later) | Run a workflow when an application becomes active (feeds on `context.changed`). |
+
+**Status: NOT STARTED** — build the sequential runner on top of the existing action registry; Phase 3 surfaces and Phase 6 events consume it.
+
+---
+
+## PHASE 9 — DEEP INTEGRATIONS: REMOTE CONTROL + EXTERNAL DEVICES
+
+**Sources:** PRODUCT_SPEC §11, §13.2 · PRIORITY_FEATURES Phase 7 (ranks 17, 18, 19, 21) · Stream Deck research (audio device switching, external controls) · Tact's mobile form factor (remote computer control is the opportunity a physical Stream Deck can't offer)
 
 **Priority: B+.** Make Tact useful across the full workday; feeds the Terminal / Teams / CI state cards from Phase 3 & 5.
+
+### 9.1 Deep developer integrations
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
 | [ ] | GitHub / GitLab | PR status, CI checks, review count, comments; `[OPEN]` opens the PR. Auth via stored PAT (allowlisted, never logged). |
 | [ ] | CI/CD status | Pipeline runs per repo: `● Running · lint ✓ tests ✓ build ●`; rerun/failed-job open actions. |
 | [ ] | Database status/control | PostgreSQL: connections, queries/s, CPU; `[OPEN] [RESTART]` (restart requires confirmation). |
-| [ ] | Process / service monitor | Process list + CPU/mem; start/stop/restart for known services. |
+| [ ] | Process / service monitor | Process list + CPU/mem; start/stop/restart for known services. Feeds Phase 5 "running tasks" + Phase 6 `process.exited`. |
 | [ ] | Terminal jobs + output | Live running jobs (`npm test`, `docker build`, `pytest`) with status + elapsed; tap → full output; feeds the Terminal surface state card. |
 | [ ] | Find / open specific file | Path search over the workspace; open in VS Code at line. |
-| [ ] | Meeting controls | Teams/Slack/Zoom: mute, camera, share, timer, leave; feeds the Teams surface state card. |
+| [ ] | Meeting controls | Teams/Slack/Zoom: mute, camera, share, timer, leave; feeds the Teams surface state card + Phase 5 meeting state. |
 | [ ] | AI-tool integration foundations | Open ChatGPT/Claude/Gemini; optionally send a selected snippet/error. |
+
+### 9.2 🎛 Remote computer control
+
+Not Stream Deck functionality — this is Tact's own opportunity: **the laptop keeps running while you're away, and Tact becomes its remote control.** Example:
+
+```text
+MY LAPTOP
+● Online
+
+RUNNING
+Flutter build      ●
+Docker             ●
+Model training     ● 67%
+
+[ View Logs ] [ Stop Build ] [ Restart Build ]
+[ Lock ] [ Sleep ]
+```
+
+| Status | Item | Description |
+| ------ | ---- | ----------- |
+| [ ] | Remote laptop status | Online/offline + last seen (pairing `last_seen` exists; surface it as a status card). |
+| [ ] | Remote application launch | Launch an application remotely (existing `system.open_*`). |
+| [ ] | Remote process control | Start/stop/restart **approved** processes (from 9.1 process monitor; destructive actions need confirmation). |
+| [ ] | Remote command execution | Execute **allowlisted** commands/scripts (project commands from Phase 3.10 / custom allowlist). |
+| [ ] | Remote task status | See running builds/scripts/training/downloads (Phase 5 running tasks, remote). |
+| [ ] | Remote logs | View recent output from running jobs (9.1 terminal jobs, remote view). |
+| [ ] | Remote lock | Lock computer remotely. |
+| [ ] | Remote sleep | Put computer to sleep remotely. |
+| [ ] | Remote shutdown | Shutdown with confirmation. |
+| [ ] | Remote restart | Restart with confirmation. |
+
+### 9.3 🎛 External controls
+
+From the review mentioning switching audio devices, streaming controls, OBS and smart lighting. **Don't build all of these yet** — the generic HTTP/webhook action covers most ecosystems without a native integration.
+
+| Status | Item | Description |
+| ------ | ---- | ----------- |
+| [ ] | Audio output device switching | Sinks via pactl (also in Phase 4.3 — shared capability). |
+| [ ] | Microphone device switching | Sources via pactl. |
+| [ ] | OBS basic controls | Start/stop stream & recording (OBS WebSocket API). |
+| [ ] | Smart-light controls | Hue / WLED etc. (via generic webhook). |
+| [ ] | Generic HTTP/webhook actions | Define a webhook/URL as an action (GET/POST, allowlisted endpoints) — lets Tact control anything without a native integration per ecosystem. |
+| [ ] | External device integrations | Anything else as demand is demonstrated. |
 
 **Status: NOT STARTED**
 
@@ -524,16 +698,37 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 
 **Sources:** PRODUCT_SPEC §15.3 · PRIORITY_FEATURES Phase 8 (rank 23) · Tact Surface concept #3
 
-**Priority: B.** Interact with Tact without opening the full app.
+**Priority: B.** Interact with Tact without opening the full app. **Where Tact beats a physical Stream Deck:** Android home screen → "Build failed" → tap **Rebuild**.
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Android home-screen widget | Workspace health mini-display (Build ✓ / Tests ✓ / ⚠ Redis / Git ↑2). |
-| [ ] | Media widget | `◀ ▶/❚❚ ▶` + volume from the lock screen / home screen. |
+| [ ] | Laptop status widget | Online/offline + last seen + battery on the home screen. |
+| [ ] | Running task widget | Currently running builds/scripts/training with status + elapsed. |
+| [ ] | Build/test status widget | Build ✓ / Tests ✓ with last run; failed → tap to act. |
+| [ ] | Media controls widget | `◀ ▶/❚❚ ▶` + volume from the lock screen / home screen. |
+| [ ] | Pinned action widget | A few user-pinned one-tap actions on the home screen. |
+| [ ] | Recent event widget | Last attention events (build failed, PR comment) with quick actions. |
+| [ ] | Android home-screen widget | Combined workspace-health mini-display (Build ✓ / Tests ✓ / ⚠ Redis / Git ↑2). |
 | [ ] | Notification quick actions | Media transport + common actions as notification-area buttons. |
 | [ ] | PWA polish / native notifications | If a web client returns; native notifications + haptics where justified. |
 
 **Status: NOT STARTED**
+
+---
+
+## WHAT NOT TO BUILD YET (deferred, per Stream Deck research)
+
+The reviews tempt you to add everything. These are proofs of breadth, not things that prove the product. **Deliberately deferred:**
+
+- Gaming profiles / MMO controls
+- Elaborate OBS Studio integration (basic start/stop only, Phase 9.3)
+- Extensive smart-home ecosystem (generic webhook instead, Phase 9.3)
+- CAD-specific controls
+- Blender-specific controls (example only in Phase 3 docs)
+- Photoshop-specific controls (example only in Phase 3 docs)
+- Marketplace / arbitrary plugin ecosystem (Phase 11, after demand is demonstrated)
+- 64-button customization / huge grid layouts (Tact is a contextual surface, not a button grid)
+- AI-generated profiles (Phase 12)
 
 ---
 
@@ -609,6 +804,6 @@ workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 | --------- | ----- | ------ |
 | **A** | **Tact Surface prototype**: context engine + one or two context surfaces + control strip + glanceable state on a single screen | Phases 2, 3, 4, 5 |
 | **B** | Developer state + events: Build / Tests / Docker / Git / CI + actionable events | Phases 5, 6 |
-| **C** | Daily utility: Clipboard, Quick Capture, Brightness, Dim, Open App, Lock, Wake | Phases 4, 7 |
+| **C** | Daily utility: Clipboard + Snippets, Brightness, Dim, Open App, Lock, Wake | Phases 4, 7 |
 
-**Immediate next work:** the **Context Engine is live** (`context.status/override`, `context.changed`, phone ContextBanner). Next: Phase 2 signal aggregation, then wire the **VS Code surface** + **Control Strip** onto a single screen (Phase 3–4) — that one screen demonstrates the entire product concept. Codebase is modular: one integration file per capability (`tact/agent/integrations/README.md`).
+**Immediate next work:** the **Context Engine is live** (`context.status/override`, `context.changed`, phone ContextBanner). Next: Phase 2 signal aggregation, then wire the **VS Code surface** + **Control Strip** onto a single screen (Phase 3–4) — that one screen demonstrates the entire product concept. After the profile framework lands, the Stream Deck-derived layers are cheap to add since they reuse existing backend pieces: app launcher (3.8) and window/workspace control (3.9) build on `system.open_*` + `wmctrl`; project workspace (3.10) builds on Phase 2 context resolution; Workflows & Macros (Phase 8) compose registered actions. Codebase is modular: one integration file per capability (`tact/agent/integrations/README.md`).
