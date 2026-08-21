@@ -435,18 +435,6 @@ python3 -m pytest tests/ -q        # agent unit tests (75 passing)
 cd app && flutter test             # Flutter widget smoke test
 ```
 
-## Color scheme
-
-The clients use a dark "instrument cluster" theme inspired by automotive HUDs:
-- Background: `#0a0e14` (near-black graphite)
-- Surface: `#121821`
-- Primary: `#2fd3e8` (electric cyan)
-- Accent: `#f07316` (amber-orange warning)
-- Status: green (ok/playing), amber (busy), red `#ff4d5e` (critical)
-
-The System tab renders CPU/RAM/disk as circular gauges, the Media tab
-now-playing card uses a scrolling marquee, and the context banner sits above
-all tabs.
 
 ## Roadmap
 
