@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from tact.agent.integrations.git import GitIntegration
@@ -11,6 +12,11 @@ from tact.agent.integrations.media import MediaIntegration
 from tact.agent.integrations.docker import DockerIntegration
 from tact.agent.integrations.clipboard import ClipboardIntegration
 from tact.agent.integrations.context import ContextIntegration
+from tact.agent.integrations.chrome import ChromeIntegration
+from tact.agent.integrations.teams import TeamsIntegration
+from tact.agent.integrations.window import WindowIntegration
+from tact.agent.integrations.system import SystemIntegration
+from tact.agent.integrations.project import ProjectIntegration
 
 
 class GitIntegrationTests(unittest.TestCase):
@@ -503,6 +509,390 @@ class ContextIntegrationTests(unittest.TestCase):
 
             integration.monitor(bus)  # unchanged -> no event
             self.assertEqual(len(received), 1)
+
+    # -- Phase 2: signal aggregation --------------------------------------
+
+    class _FakeDocker:
+        def __init__(self, running: bool):
+            self._running = running
+
+        def containers(self) -> dict:
+            if not self._running:
+                return {"available": True, "containers": [], "count": 0}
+            return {
+                "available": True,
+                "containers": [{"name": "postgres", "state": "running"}],
+                "count": 1,
+            }
+
+    @patch("tact.agent.integrations.context.integration.active_window")
+    def test_unknown_app_with_running_docker_classifies_development(self, mock_window):
+        mock_window.return_value = {"id": "0x1", "class": "some-unknown-app", "title": ""}
+        integration = ContextIntegration()
+        integration._docker = self._FakeDocker(running=True)
+
+        result = integration.detect()
+
+        self.assertEqual(result["workflow"], "development")
+        self.assertTrue(result["signals"]["docker_running"])
+        self.assertFalse(result["signals"]["git_active"])
+
+    @patch("tact.agent.integrations.context.integration.active_window")
+    def test_unknown_app_without_signals_has_no_workflow(self, mock_window):
+        mock_window.return_value = {"id": "0x1", "class": "some-unknown-app", "title": ""}
+        integration = ContextIntegration()
+        integration._docker = self._FakeDocker(running=False)
+
+        result = integration.detect()
+
+        self.assertIsNone(result["workflow"])
+        self.assertFalse(result["signals"]["docker_running"])
+
+    @patch("tact.agent.integrations.context.integration.active_window")
+    def test_active_git_project_classifies_development(self, mock_window):
+        mock_window.return_value = {"id": "0x1", "class": "some-unknown-app", "title": ""}
+        integration = ContextIntegration()
+        integration.workspace_path = "/repo"
+        with patch.object(
+            integration._git, "discover_root", return_value="/repo"
+        ), patch.object(
+            integration._git,
+            "status",
+            return_value={"available": True, "branch": "main", "clean": False},
+        ):
+            result = integration.detect()
+
+        self.assertEqual(result["workflow"], "development")
+        self.assertTrue(result["signals"]["git_active"])
+
+    @patch("tact.agent.integrations.context.integration.active_window")
+    def test_known_app_workflow_wins_over_signals(self, mock_window):
+        mock_window.return_value = {"id": "0x1", "class": "teams", "title": "Meeting"}
+        integration = ContextIntegration()
+        integration._docker = self._FakeDocker(running=True)
+
+        result = integration.detect()
+
+        self.assertEqual(result["workflow"], "meeting")
+
+    # -- Phase 3.1: surface selection --------------------------------------
+
+    @patch("tact.agent.integrations.context.integration.active_window")
+    def test_surface_selected_for_known_app(self, mock_window):
+        mock_window.return_value = {"id": "0x1", "class": "code", "title": "main.dart — Tact"}
+        integration = ContextIntegration()
+        with patch.object(integration._git, "discover_root", return_value=None):
+            result = integration.detect()
+
+        self.assertEqual(result["surface"]["id"], "vscode")
+        self.assertEqual(result["surface"]["title"], "VS Code")
+        self.assertEqual(result["surface"]["state_card"], "git")
+        self.assertTrue(
+            any(a["id"] == "git.pull" for a in result["surface"]["actions"])
+        )
+        self.assertIn("surfaces", result)
+        self.assertTrue(any(s["id"] == "fallback" for s in result["surfaces"]))
+
+    @patch("tact.agent.integrations.context.integration.active_window")
+    def test_surface_fallback_for_unknown_app(self, mock_window):
+        mock_window.return_value = {"id": "0x1", "class": "weird-app", "title": ""}
+        integration = ContextIntegration()
+
+        result = integration.detect()
+
+        self.assertEqual(result["surface"]["id"], "fallback")
+        self.assertEqual(result["surface"]["title"], "Desktop")
+
+    @patch("tact.agent.integrations.context.detection.os.environ", {})
+    def test_surface_fallback_when_detection_unavailable(self):
+        integration = ContextIntegration()
+        result = integration.detect()
+
+        self.assertFalse(result["available"])
+        self.assertEqual(result["surface"]["id"], "fallback")
+
+    def test_surfaces_action_lists_registry(self):
+        integration = ContextIntegration()
+        result = integration.surfaces()
+
+        self.assertTrue(result["ok"])
+        ids = {s["id"] for s in result["surfaces"]}
+        self.assertTrue({"vscode", "terminal", "spotify", "fallback"} <= ids)
+
+    def test_spotify_surface_media_state_card(self):
+        from tact.agent.integrations.context.surfaces import SURFACES
+
+        spotify = SURFACES["spotify"].to_json()
+        self.assertEqual(spotify["state_card"], "media")
+        self.assertEqual(
+            [a["id"] for a in spotify["actions"]],
+            ["media.play_pause", "media.previous", "media.next"],
+        )
+
+    def test_browser_surfaces_prompt_for_url(self):
+        from tact.agent.integrations.context.surfaces import SURFACES
+
+        chrome = SURFACES["chrome"].to_json()
+        url_action = next(a for a in chrome["actions"] if a["id"] == "system.open_url")
+        self.assertEqual(url_action["prompt"], "url")
+
+
+class ChromeIntegrationTests(unittest.TestCase):
+    @patch("tact.agent.integrations.chrome.integration.shutil.which", return_value="/usr/bin/xdotool")
+    @patch("tact.agent.integrations.chrome.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.chrome.integration.subprocess.run")
+    def test_back_sends_alt_left(self, mock_run, mock_which):
+        integration = ChromeIntegration()
+        result = integration.actions()["back"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["key"], "alt+Left")
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args[0][0], ["xdotool", "key", "--clearmodifiers", "alt+Left"])
+
+    @patch("tact.agent.integrations.chrome.integration.shutil.which", return_value="/usr/bin/xdotool")
+    @patch("tact.agent.integrations.chrome.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.chrome.integration.subprocess.run")
+    def test_copy_url_sends_two_keys(self, mock_run, mock_which):
+        integration = ChromeIntegration()
+        result = integration.actions()["copy_url"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(mock_run.call_args_list), 2)
+        self.assertEqual(mock_run.call_args_list[1][0][0][3], "ctrl+c")
+
+    @patch("tact.agent.integrations.chrome.integration.shutil.which", return_value=None)
+    def test_unavailable_without_xdotool(self, mock_which):
+        integration = ChromeIntegration()
+        result = integration.actions()["refresh"]({})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "xdotool_unavailable")
+
+
+class TeamsIntegrationTests(unittest.TestCase):
+    @patch("tact.agent.integrations.teams.integration.shutil.which", side_effect=lambda p: "/usr/bin/" + p)
+    @patch("tact.agent.integrations.teams.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.teams.integration.subprocess.run")
+    def test_mute_focuses_teams_then_keys(self, mock_run, mock_which):
+        integration = TeamsIntegration()
+        result = integration.actions()["mute"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["key"], "ctrl+shift+m")
+        calls = mock_run.call_args_list
+        self.assertEqual(calls[0][0][0], ["wmctrl", "-a", "Teams"])
+        self.assertEqual(calls[1][0][0], ["xdotool", "key", "--clearmodifiers", "ctrl+shift+m"])
+
+    @patch("tact.agent.integrations.teams.integration.shutil.which", return_value=None)
+    def test_unavailable_without_tools(self, mock_which):
+        integration = TeamsIntegration()
+        result = integration.actions()["leave"]({})
+        self.assertFalse(result["ok"])
+
+
+class WindowIntegrationTests(unittest.TestCase):
+    @patch("tact.agent.integrations.window.integration.shutil.which", return_value="/usr/bin/wmctrl")
+    @patch("tact.agent.integrations.window.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.window.integration.subprocess.run")
+    def test_list_parses_wmctrl_output(self, mock_run, mock_which):
+        class Result:
+            returncode = 0
+            stdout = (
+                "0x04000007  0 host Tact — Visual Studio Code   code.Code\n"
+                "0x05000003  1 host Konsole   org.kde.konsole.Konsole\n"
+            )
+
+        mock_run.return_value = Result()
+        integration = WindowIntegration()
+        result = integration.actions()["list"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["windows"]), 2)
+        self.assertEqual(result["windows"][0]["wm_class"], "code.Code")
+        self.assertEqual(result["windows"][1]["desktop"], 1)
+
+    @patch("tact.agent.integrations.window.integration.shutil.which", return_value="/usr/bin/wmctrl")
+    @patch("tact.agent.integrations.window.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.window.integration.subprocess.run")
+    def test_maximize_sets_property(self, mock_run, mock_which):
+        class Result:
+            returncode = 0
+            stdout = ""
+
+        mock_run.return_value = Result()
+        integration = WindowIntegration()
+        result = integration.actions()["maximize"]({"title": "Konsole"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            mock_run.call_args[0][0],
+            ["wmctrl", "-r", "Konsole", "-b", "add,maximized_vert,maximized_horz"],
+        )
+
+    @patch("tact.agent.integrations.window.integration.shutil.which", return_value="/usr/bin/wmctrl")
+    @patch("tact.agent.integrations.window.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.window.integration.subprocess.run")
+    def test_apply_layout_reports_missing_windows(self, mock_run, mock_which):
+        class Result:
+            returncode = 1
+            stdout = ""
+
+        mock_run.return_value = Result()
+        integration = WindowIntegration()
+        result = integration.actions()["apply_layout"]({"name": "coding"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["layout"], "coding")
+        self.assertGreaterEqual(len(result["missing"]), 3)
+
+    def test_apply_layout_rejects_unknown(self):
+        integration = WindowIntegration()
+        result = integration.actions()["apply_layout"]({"name": "bogus"})
+        self.assertFalse(result["ok"])
+
+    def test_layouts_lists_presets(self):
+        integration = WindowIntegration()
+        result = integration.actions()["layouts"]({})
+        self.assertTrue(result["ok"])
+        names = {l["name"] for l in result["layouts"]}
+        self.assertTrue({"coding", "meeting", "media"} <= names)
+
+
+class SystemAppLauncherTests(unittest.TestCase):
+    def setUp(self):
+        self.integration = SystemIntegration()
+
+    @patch("tact.agent.integrations.system.integration.shutil.which", return_value="/usr/bin/wmctrl")
+    @patch("tact.agent.integrations.system.integration.subprocess.run")
+    def test_apps_marks_running_from_wmctrl(self, mock_run, mock_which):
+        class Result:
+            returncode = 0
+            stdout = "0x04000007  0 host Tact — Visual Studio Code   code.Code\n"
+
+        mock_run.return_value = Result()
+        result = self.integration.actions()["apps"]({})
+        self.assertTrue(result["ok"])
+        by_id = {a["id"]: a for a in result["apps"]}
+        self.assertTrue(by_id["vscode"]["running"])
+        self.assertFalse(by_id["chrome"]["running"])
+        self.assertIn("development", result["groups"])
+
+    @patch("tact.agent.integrations.system.integration.subprocess.Popen")
+    @patch("tact.agent.integrations.system.integration.shutil.which", side_effect=lambda p: "/usr/bin/" + p if p == "code" else None)
+    def test_open_app_launches_and_focuses(self, mock_which, mock_popen):
+        result = self.integration.actions()["open_app"]({"app": "vscode"})
+        self.assertTrue(result["ok"])
+        launch_call = mock_popen.call_args_list[0]
+        self.assertEqual(launch_call[0][0], ["code"])
+
+    def test_open_app_rejects_unknown(self):
+        result = self.integration.actions()["open_app"]({"app": "nope"})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "unknown_app")
+
+    def test_open_app_requires_app(self):
+        result = self.integration.actions()["open_app"]({})
+        self.assertFalse(result["ok"])
+
+    @patch("tact.agent.integrations.system.integration.shutil.which", return_value=None)
+    def test_apps_graceful_without_wmctrl(self, mock_which):
+        result = self.integration.actions()["apps"]({})
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["apps"])
+        self.assertTrue(all(not a["running"] for a in result["apps"]))
+
+    @patch("tact.agent.integrations.system.integration.shutil.which", return_value="/usr/bin/pactl")
+    @patch("tact.agent.integrations.system.integration.subprocess.run")
+    def test_sinks_marks_default(self, mock_run, mock_which):
+        class Result:
+            returncode = 0
+            stdout = "analog\n"
+
+        mock_run.return_value = Result()
+        mock_run.side_effect = [
+            Result(),  # get-default-sink -> "analog"
+            SimpleNamespace(returncode=0, stdout="0\thdmi\n1\tanalog\n"),
+        ]
+        result = self.integration.actions()["sinks"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["default"], "analog")
+        by_name = {s["name"]: s for s in result["sinks"]}
+        self.assertTrue(by_name["analog"]["default"])
+        self.assertFalse(by_name["hdmi"]["default"])
+
+    @patch("tact.agent.integrations.system.integration.shutil.which", return_value="/usr/bin/pactl")
+    @patch("tact.agent.integrations.system.integration.subprocess.run")
+    def test_set_sink_calls_pactl(self, mock_run, mock_which):
+        class Result:
+            returncode = 0
+            stdout = ""
+
+        mock_run.return_value = Result()
+        result = self.integration.actions()["set_sink"]({"sink": "hdmi"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(mock_run.call_args[0][0], ["pactl", "set-default-sink", "hdmi"])
+
+    @patch("tact.agent.integrations.system.integration.shutil.which", return_value="/usr/bin/xrandr")
+    @patch("tact.agent.integrations.system.integration.subprocess.run")
+    def test_brightness_sets_overlay(self, mock_run, mock_which):
+        class Result:
+            def __init__(self, stdout="", returncode=0):
+                self.stdout = stdout
+                self.returncode = returncode
+
+        mock_run.side_effect = [
+            Result("eDP-1 connected primary 1920x1080\nHDMI-1 disconnected\n"),
+            Result(),
+        ]
+        result = self.integration.actions()["brightness"]({"value": "50"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["brightness"], 50)
+        self.assertEqual(
+            mock_run.call_args_list[1][0][0],
+            ["xrandr", "--output", "eDP-1", "--brightness", "0.50"],
+        )
+
+
+class ProjectIntegrationTests(unittest.TestCase):
+    @patch("tact.agent.integrations.project.integration.shutil.which", return_value="/usr/bin/code")
+    @patch("tact.agent.integrations.project.integration.subprocess.Popen")
+    @patch("tact.agent.integrations.project.integration.Path.is_dir", return_value=True)
+    def test_open_launches_environment(self, mock_is_dir, mock_popen, mock_which):
+        integration = ProjectIntegration()
+        result = integration.actions()["open"]({"path": "/home/u/Projects/Tact"})
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["opened"]["vscode"])
+        launch_call = mock_popen.call_args_list[0]
+        self.assertEqual(launch_call[0][0][0], "code")
+
+    @patch("tact.agent.integrations.project.integration.Path.is_dir", return_value=False)
+    def test_open_rejects_missing_dir(self, mock_is_dir):
+        integration = ProjectIntegration()
+        result = integration.actions()["open"]({"path": "/nope"})
+        self.assertFalse(result["ok"])
+
+    @patch("tact.agent.integrations.project.integration.subprocess.run")
+    def test_resources_includes_repo_url(self, mock_run):
+        class Result:
+            returncode = 0
+            stdout = "git@github.com:user/repo.git\n"
+
+        mock_run.return_value = Result()
+        integration = ProjectIntegration()
+        result = integration.actions()["resources"]({"path": "/home/u/Projects/Tact"})
+        self.assertTrue(result["ok"])
+        repo = next(r for r in result["resources"] if r["id"] == "repo")
+        self.assertEqual(repo["url"], "https://github.com/user/repo")
+
+
+class ContextRecentAppsTests(unittest.TestCase):
+    @patch("tact.agent.integrations.context.integration.active_window")
+    def test_recent_apps_tracks_distinct_apps(self, mock_window):
+        mock_window.side_effect = [
+            {"class": "code", "title": "Tact — Visual Studio Code"},
+            {"class": "google-chrome", "title": "Tact - Google Chrome"},
+            {"class": "code", "title": "Tact — Visual Studio Code"},
+            {"class": "code", "title": "Tact — Visual Studio Code"},
+        ]
+        integration = ContextIntegration()
+        integration.detect()
+        integration.detect()
+        integration.detect()
+        self.assertEqual(integration.detect()["recent_apps"], ["chrome", "vscode"])
 
 
 if __name__ == "__main__":

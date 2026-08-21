@@ -14,6 +14,8 @@ abstract final class AppTheme {
   static const Color accent = Color(0xFFF07316); // amber-orange warning accent
   static const Color onSurface = Color(0xFFE8EEF4);
   static const Color muted = Color(0xFF8A96A6);
+  static const Color success = Color(0xFF4CC38A);
+  static const Color danger = Color(0xFFFF4D5E);
 
   static ThemeData dark() {
     final scheme = ColorScheme.fromSeed(

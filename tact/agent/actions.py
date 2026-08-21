@@ -12,6 +12,10 @@ from .integrations.media import MediaIntegration
 from .integrations.docker import DockerIntegration
 from .integrations.clipboard import ClipboardIntegration
 from .integrations.context import ContextIntegration
+from .integrations.chrome import ChromeIntegration
+from .integrations.teams import TeamsIntegration
+from .integrations.window import WindowIntegration
+from .integrations.project import ProjectIntegration
 
 
 class OpenUrlPayload(BaseModel):
@@ -35,6 +39,13 @@ class ActionRegistry:
         self.docker = DockerIntegration()
         self.clipboard = ClipboardIntegration()
         self.context = ContextIntegration()
+        self.chrome = ChromeIntegration()
+        self.teams = TeamsIntegration()
+        self.window = WindowIntegration()
+        self.project = ProjectIntegration()
+        # Share the docker instance so the Context Engine's signal
+        # aggregation (Phase 2) sees the same container state the monitor does.
+        self.context._docker = self.docker
 
         self.integrations: list[Integration] = [
             self.system,
@@ -44,6 +55,10 @@ class ActionRegistry:
             self.docker,
             self.clipboard,
             self.context,
+            self.chrome,
+            self.teams,
+            self.window,
+            self.project,
         ]
         self.event_bus = EventBus()
         self._current_workspace_path = current_workspace_path

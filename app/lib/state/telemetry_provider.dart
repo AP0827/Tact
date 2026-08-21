@@ -17,5 +17,12 @@ StateNotifierProvider<TactStateNotifier, Map<String, dynamic>?>((ref) {
 
 class TactStateNotifier extends StateNotifier<Map<String, dynamic>?> {
   TactStateNotifier() : super(null);
-  void update(Map<String, dynamic> newState) => state = newState;
+
+  /// When the current snapshot was received (stale-indicator input).
+  DateTime? lastUpdated;
+
+  void update(Map<String, dynamic> newState) {
+    state = newState;
+    lastUpdated = DateTime.now();
+  }
 }

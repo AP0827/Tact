@@ -21,6 +21,10 @@ class VSCodeIntegration(Integration):
             "open_workspace": lambda p: self.open_workspace(payload_str(p, "path")),
             "status": lambda p: self.status(payload_str(p, "path")),
             "workspaces": lambda p: self.workspaces(),
+            "run_task": lambda p: self.run_task(payload_str(p, "task")),
+            "debug": lambda p: self.debug(),
+            "test": lambda p: self.test(),
+            "open_file": lambda p: self.open_file(payload_str(p, "path"), payload_str(p, "line")),
         }
 
     def snapshot(self) -> dict[str, Any]:
@@ -97,6 +101,49 @@ class VSCodeIntegration(Integration):
             "command": self.resolve_command(),
             "workspace": str(workspace_path),
         }
+
+    # -- Phase 3.2: run / debug / test ------------------------------------
+
+    def _run_command(self, command: str, args: list[str]) -> dict[str, Any]:
+        if command is None:
+            return {"ok": False, "error": "vscode_not_available"}
+        try:
+            subprocess.Popen(
+                [command] + args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return {"ok": True, "command": command, "args": args}
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def run_task(self, task: Optional[str] = None) -> dict[str, Any]:
+        """Run a VS Code task. Without a task label VS Code shows its task
+        picker; with one the named task runs directly (--args JSON form)."""
+        args = ["--command", "workbench.action.tasks.runTask"]
+        if task:
+            args += ["--args", json.dumps([task])]
+        return self._run_command(self.resolve_command(), args)
+
+    def debug(self) -> dict[str, Any]:
+        return self._run_command(
+            self.resolve_command(), ["--command", "workbench.action.debug.start"]
+        )
+
+    def test(self) -> dict[str, Any]:
+        return self._run_command(
+            self.resolve_command(), ["--command", "workbench.action.tasks.test"]
+        )
+
+    def open_file(self, path: str | None, line: Optional[str] = None) -> dict[str, Any]:
+        """Open a file at an optional line (`code --goto path[:line]`)."""
+        if not path:
+            return {"ok": False, "error": "path_required"}
+        target = str(Path(path).resolve())
+        if line:
+            target += f":{line}"
+        return self._run_command(self.resolve_command(), ["--goto", target])
 
     def config_dir(self) -> Optional[Path]:
         """VS Code user data dir (where workspaceStorage lives)."""

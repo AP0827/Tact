@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -16,6 +17,16 @@ from .config import Config
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
+# Browser clients (Flutter web served from a dev server) call the agent
+# cross-origin. Auth is OTP + explicit laptop-side approval, so any origin is
+# acceptable for this LAN tool.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 manager = ConnectionManager()
 actions = ActionRegistry()
 monitor = StateMonitor(actions.event_bus, actions.integrations)
@@ -228,7 +239,10 @@ def _is_state_changing_action(action_id: str) -> bool:
     """Actions that mutate state we snapshot — the phone should refresh after."""
     return action_id.startswith(
         ("git.", "media.", "system.set_workspace", "vscode.open_workspace",
-         "docker.", "clipboard.", "context.")
+         "docker.", "clipboard.", "context.", "chrome.", "teams.",
+         "window.", "project.", "system.brightness", "system.set_sink",
+         "system.open_app", "system.focus_app", "system.lock_screen",
+         "system.screenshot", "system.volume", "system.mute")
     )
 
 
@@ -238,6 +252,23 @@ def snapshot_state() -> dict[str, Any]:
     for integration in actions.integrations:
         if hasattr(integration, "workspace_path"):
             integration.workspace_path = workspace_path
+    state: dict[str, Any] = {
+        integration.name: integration.snapshot()
+        for integration in actions.integrations
+    }
+    # Project-aware workspace: when the Context Engine resolves a project and
+    # no explicit workspace override is set, point the cross-integration
+    # git/vscode view — and hence git.* surface actions — at that project.
+    context_state = state.get("context") or {}
+    project = context_state.get("project")
+    explicit_override = (
+        getattr(app.state, "current_workspace", None) or actions._current_workspace_path
+    )
+    if project and not explicit_override:
+        workspace_path = project
+        for integration in actions.integrations:
+            if hasattr(integration, "workspace_path"):
+                integration.workspace_path = workspace_path
     current_root = actions.git.discover_root(workspace_path)
     git_status = actions.git.status(current_root) if current_root else {"available": False, "root": None}
     git_branches = actions.git.branches(current_root) if current_root else {"available": False, "branches": [], "current": None}

@@ -5,7 +5,7 @@ import '../../state/connection_provider.dart';
 
 class ActionButton
     extends ConsumerStatefulWidget {
-  final String actionId;
+  final String? actionId;
   final String label;
   final IconData? icon;
   final Map<String, dynamic>? payload;
@@ -15,7 +15,7 @@ class ActionButton
 
   const ActionButton({
     super.key,
-    required this.actionId,
+    this.actionId,
     required this.label,
     this.icon,
     this.payload,
@@ -41,11 +41,11 @@ class _ActionButtonState
     try {
       if (widget.onPressed != null) {
         await widget.onPressed!();
-      } else {
+      } else if (widget.actionId != null) {
         await ref
             .read(tactClientProvider)
             .sendAction(
-              widget.actionId,
+              widget.actionId!,
               widget.payload,
             );
       }

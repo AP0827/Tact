@@ -119,10 +119,10 @@ Active App + Project + Current State + Recent Events → TACT SURFACE
 | - | ----- | -------------- | ------ | -------- |
 | 0 | Foundation / Proof of Concept | V0.1 | COMPLETE | S |
 | 1 | Developer Control Surface | V0.1 | ~95% complete | S |
-| 2 | Context Engine | V0.2 | ~80% complete | S |
-| 3 | Application Surfaces / Profiles (Contextual Controls) | V0.3 | ~10% complete | S |
-| 4 | Persistent Control Strip | V0.4 | ~40% complete | A |
-| 5 | Glanceable State | V0.5 | ~50% complete | S |
+| 2 | Context Engine | V0.2 | ~95% complete | S |
+| 3 | Application Surfaces / Profiles (Contextual Controls) | V0.3 | ~70% complete | S |
+| 4 | Persistent Control Strip | V0.4 | ~70% complete | A |
+| 5 | Glanceable State | V0.5 | ~60% complete | S |
 | 6 | Actionable Events / Attention | V0.5 | ~30% complete | S |
 | 7 | Clipboard / Snippets / Quick Capture | V0.6 | ~50% complete | A+ |
 | 8 | Workflows & Macros | V0.7 | Not started | A |
@@ -133,7 +133,7 @@ Active App + Project + Current State + Recent Events → TACT SURFACE
 | 13 | Productization (beta / commercial / cloud) | V1.2 | Not started | — |
 | 14 | Physical Tact Hardware | V2.0 | Not started | — |
 
-**Current position:** Phases 0–1 complete; **Phase 2 Context Engine ~80% done** (detection, project/branch resolution, workflow map, override, `context.changed`, phone banner — all live). Next: Phase 2 signal aggregation → **Phase 3 Application Surfaces** (surface switching + app launcher + window/workspace control + project workspace), the identity-defining work per the Tact Surface model.
+**Current position:** Phases 0–2 complete (Context Engine ~95%); **Phase 3 Application Surfaces ~70% done** — the full app-surface set is live: VS Code Run/Debug/Test, Chrome browser nav (xdotool), Teams meeting controls, Spotify transport, **App Launcher** (3.8: known apps + running state + recent history + folders), **Window/Workspace Controls** (3.9: focus/move/minimize/maximize/close + Coding/Meeting/Media layout presets), **Project Workspace** (3.10: one-tap `project.open` environment + per-project resources on the Surface tab). **Phase 4 Control Strip is live** (compact persistent strip + expandable volume/brightness/audio-output sheet). Remaining: Terminal surface jobs (3.3), contextual gestures (3.7), build/test state cards, running tasks + meeting state (Phase 5), actionable events (Phase 6), workflows (Phase 8).
 
 **Modularity note (built into Phase 2 work):** the agent runs on the Integration pattern with **folder-per-app separation** — `integrations/<name>/` (integration.py + helper files like state.py/apps.py/detection.py) registered explicitly in `ActionRegistry`, generic `StateMonitor`. Adding a capability (figma, video editing) is one new folder + one registry line; see `tact/agent/integrations/README.md`.
 
@@ -261,7 +261,7 @@ Active App + Project + Current State + Recent Events → TACT SURFACE
 
 | Status | Item |
 | ------ | ---- |
-| [~] | **Multi-app signal aggregation** — Current: active-app → workflow map (`development`, `meeting`, `media`, …). Full aggregation (docker + git activity signals) pending. |
+| [x] | **Multi-app signal aggregation** — `workflow = active-app map`, falling back to signal aggregation: active git repo (branch resolvable from the context project) or running docker containers → `development`. Signals exposed in snapshot (`context.signals`). |
 | [x] | **Surface context object** — Produce `snapshot.context.workflow` so Phase 3 can choose a surface. |
 
 ### 2.4 Context change notification
@@ -280,7 +280,7 @@ branch     = git(project).branch
 workflow   = WORKFLOW_MAP[active_app]  (signal aggregation pending)
 ```
 
-**Status: ~80% COMPLETE** — detection, project/branch resolution, workflow map, override, and `context.changed` all live (`integrations/context.py`); snapshot + phone banner (ContextBanner) shipped. Remaining: signal aggregation (docker/git inputs) and surface switching (Phase 3).
+**Status: ~95% COMPLETE** — detection, project/branch resolution, signal aggregation (git + docker → workflow), override, and `context.changed` all live (`integrations/context/`, `surfaces.py`); snapshot + phone banner (ContextBanner) shipped. Remaining: workflow signals beyond git/docker and surface switching polish (Phase 3).
 
 ---
 
@@ -305,24 +305,25 @@ VS Code        Blender        Photoshop        Teams
 
 | Status | Item |
 | ------ | ---- |
-| [ ] | **Surface registry** — Map `context_id → profile` (title, action buttons, state widget). Shared across all contexts so adding Chrome ≠ copying code. |
-| [ ] | **Surface widget** — A Flutter widget that renders the active profile: action grid + optional state card (build/tests/git per context). |
-| [ ] | **Fallback surface** — For unknown apps, show generic system controls (volume, lock, screenshot, open terminal) so the surface is never empty. |
-| [~] | **Manual pin** — `context.override` / `context.clear_override` already pin a profile from the phone (Context Engine, Phase 2); wire it to surface selection. |
-| [ ] | **Per-app action sets** — Each profile defines its own action list (VS Code: Run/Debug/Test; Teams: Mute/Camera/Share/Leave); unknown apps get the fallback. |
-| [ ] | **Per-app state cards** — Each profile binds a state card (VS Code: build ✓; Chrome: active tab; Teams: meeting state). |
+| [x] | **Surface registry** — Map `context_id → profile` (title, action buttons, state card kind). Lives in `integrations/context/surfaces.py`; buttons reference allowlisted registry actions; `context.surfaces` lists them. |
+| [x] | **Surface widget** — Flutter `SurfaceTab` renders the active profile: header (icon + title + workflow + pin), action grid, state card. |
+| [x] | **Fallback surface** — Unknown apps and unavailable detection get the "Desktop" surface (generic system controls) so the surface is never empty. |
+| [x] | **Manual pin** — `context.override` / `context.clear_override` + pin toggle in the surface header (pins the current app/project context). |
+| [x] | **Per-app action sets** — vscode/terminal/chrome/edge/firefox/spotify/fallback each define their own action lists; unknown apps get the fallback. |
+| [~] | **Per-app state cards** — `state_card` kinds shipped: `git` (branch/dirty/ahead/behind) + `media` (now playing); more kinds (vscode build, meeting) as Phase 3.2+ actions land. |
 
 ### 3.2 VS Code surface
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Run | Execute the active project's run task (agent: `vscode.run` via `code --command workbench.action.tasks.runTask` or `code --run`). Show running state + elapsed. |
-| [ ] | Debug | Launch debug session (`workbench.action.debug.start`); stop/continue on second tap. |
-| [ ] | Test | Run tests (`workbench.action.tasks.test`); surface pass/fail count via state card. |
-| [ ] | Build | Run build task; reflect build state in the workspace state layer. |
-| [ ] | Terminal | Open integrated terminal in project (`workbench.action.terminal.new`). |
-| [ ] | Git | Open source control panel (`workbench.view.scm`); quick actions: pull / push / stage all. |
-| [ ] | State card | Build ✓/✕ + last run time; test counts; git branch ↑2. |
+| [x] | Run | Execute the active project's run task (`vscode.run_task` via `code --command workbench.action.tasks.runTask`; no task label → VS Code's task picker). |
+| [x] | Debug | Launch debug session (`vscode.debug` → `workbench.action.debug.start`). |
+| [x] | Test | Run tests (`vscode.test` → `workbench.action.tasks.test`). |
+| [ ] | Build | Run build task; reflect build state in the workspace state layer (run_task covers arbitrary tasks — dedicated build state pending). |
+| [~] | Terminal | New terminal window at the project (`system.open_terminal` on the surface); integrated-terminal command pending. |
+| [x] | Git | Pull / push / status on the surface (project-aware via the Context Engine's resolved project). |
+| [~] | State card | `git` card live (branch/dirty/ahead/behind); build ✓/✕ + test counts pending. |
+| [x] | Open file | `vscode.open_file` (`code --goto path:line`) with a text-prompt button on the phone. |
 
 ### 3.3 Terminal surface
 
@@ -339,11 +340,11 @@ VS Code        Blender        Photoshop        Teams
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Back / Forward / Refresh | Browser nav via `xdotool key ctrl+Left` etc., or a Chrome DevTools Protocol (CDP) connection to the running instance. |
-| [ ] | New tab / Close tab | CDP `Target.createTarget` / `Page.close`. |
-| [ ] | DevTools | CDP open devtools for active tab. |
-| [ ] | Copy URL | CDP `Page.getNavigationHistory` → copy current URL to clipboard. |
-| [ ] | State card | Active tab title + URL (from CDP). |
+| [x] | Back / Forward / Refresh | xdotool key combos (alt+Left / alt+Right / ctrl+r) sent to the focused Chrome window — safe because the Context Engine guarantees Chrome is active when this surface shows. |
+| [x] | New tab / Close tab / Reopen | `chrome.new_tab/close_tab/reopen_tab` (ctrl+t / ctrl+w / ctrl+shift+t). |
+| [x] | DevTools | `chrome.devtools` (ctrl+shift+i). |
+| [x] | Copy URL | `chrome.copy_url` (ctrl+l then ctrl+c). |
+| [ ] | State card | Active tab title + URL — deferred with CDP (needs Chrome launched with `--remote-debugging-port`; xdotool works with zero config). The surface is backend-swappable: a CDP client can replace the xdotool calls without touching surface definitions. |
 
 ### 3.5 Spotify surface
 
@@ -357,9 +358,9 @@ VS Code        Blender        Photoshop        Teams
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Mute / Camera | Toggle via `xdotool` key combos (Ctrl+Shift+M / Ctrl+Shift+O) targeting the Teams window, or a Teams accessibility bridge. |
-| [ ] | Screen share | Start/stop share (Ctrl+Shift+E), confirm prompt state. |
-| [ ] | Leave | End call (Ctrl+Shift+B). |
+| [x] | Mute / Camera | `teams.mute/camera` — `wmctrl -a Teams` then xdotool Ctrl+Shift+M / Ctrl+Shift+O (the wmctrl activation is the same proven `open_spotify` path). |
+| [x] | Screen share | `teams.share` (Ctrl+Shift+E). |
+| [x] | Leave | `teams.leave` (Ctrl+Shift+B). |
 | [ ] | State card | Meeting state + duration (Phase 9 meeting controls feed this). |
 
 ### 3.7 Contextual gestures
@@ -392,10 +393,10 @@ Implications for Phase 3/4 (extend the existing interaction model, don't invent 
 | Status | Item |
 | ------ | ---- |
 | [x] | Volume slider (drag) — live |
-| [ ] | Brightness slider (drag) — Phase 4 |
+| [x] | Brightness slider (drag) — live (Control Strip sheet, xrandr overlay) |
 | [ ] | Media seek (drag on now-playing timeline) |
 | [ ] | Timeline controls (scrub) for running tasks/processes |
-| [ ] | Variable adjustment — generic drag-to-set-value action (e.g. volume, brightness, seek share one slider primitive) |
+| [~] | Variable adjustment — volume/brightness share one slider primitive in the Control Strip sheet |
 | [ ] | Horizontal / vertical drag actions — swipe gestures that trigger actions (media prev/next, context switching) |
 
 ### 3.8 🎛 Application Launcher
@@ -404,9 +405,9 @@ Users use Stream Decks as an **extension of the desktop** — launching/focusing
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | App launcher surface | Show frequently used / running applications; one tap launches or focuses the application (reuse `system.open_*` + window focus). |
-| [ ] | Recent applications | Show recently used applications dynamically (feed from Context Engine's active-app history). |
-| [ ] | App folders | Group applications into folders such as **Development**, **Communication**, **Media**, etc. |
+| [x] | App launcher surface | **Apps tab**: known-app registry grouped into Development / Communication / Media, one tap launches (`system.open_app` → binary + focus-after-launch poll) or focuses a running app (`system.focus_app`); running indicator dot. |
+| [x] | Recent applications | Context Engine keeps a rolling app-history deque → `context.recent_apps`, rendered as a Recent row in the Apps tab. |
+| [x] | App folders | Groups Development / Communication / Media ship with the registry (`system.apps.groups`). |
 
 ### 3.9 🎛 Window / Workspace Controls
 
@@ -414,11 +415,11 @@ Comes from Stream Deck users who arrange applications across multiple monitors. 
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Focus application | Bring an existing application window to the foreground (window activation — `wmctrl -a`, already proven for `open_spotify`). |
-| [ ] | Move window | Move the active/running window to a selected monitor/workspace (`wmctrl -r -e` / `-o`). |
-| [ ] | Window layout presets | Save layouts such as **Coding / Meeting / Media** (list of window placements). |
-| [ ] | Workspace preset | One tap opens/focuses the applications belonging to a workspace. |
-| [ ] | Minimize / maximize / close | Basic window actions (`wmctrl -r -b add,hidden` / `-b add,maximized_vert,maximized_horz` / `-c`). |
+| [x] | Focus application | `window.focus` / `system.focus_app` (wmctrl `-a`); running-window list from `wmctrl -lx` (title + WM_CLASS parsed). |
+| [x] | Move window | `window.move` (`wmctrl -r <title> -e gravity,desktop,x,y,w,h`); move to another desktop included. |
+| [x] | Window layout presets | **Coding / Meeting / Media** presets in `integrations/window/` — `window.apply_layout` tiles each app's window to its preset geometry; missing windows reported back. |
+| [~] | Workspace preset | Layout presets include which apps the workspace needs — "open missing apps" is next (currently moves existing windows only). |
+| [x] | Minimize / maximize / close | `window.minimize/maximize/close` (`wmctrl -b add,hidden` / `-b add,maximized_vert,maximized_horz` / `-c`) — per-window buttons in the Apps tab. |
 
 ### 3.10 🎛 Project Workspace
 
@@ -436,13 +437,13 @@ TACT
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Project launcher | Select a project and open its associated applications/files/tools. |
-| [ ] | Project resources | Show repository, VS Code workspace, terminal, browser, Docker and relevant folders for the active project. |
-| [ ] | Project commands | Expose commands associated with that project (run, test, build, deploy — from the project's detected toolchain). |
-| [ ] | Project surface | When a project is active, show its relevant actions rather than generic app actions (nested under the application profile). |
+| [x] | Project launcher | `project.open` — composite: VS Code + terminal at the project path + file manager, one tap from the phone's project card. |
+| [x] | Project resources | `project.resources` resolves the git remote → repo URL; the Surface tab's project card renders Workspace / Terminal / Browser / Folder / Repo resource chips bound to existing actions. |
+| [ ] | Project commands | Expose commands associated with that project (run, test, build, deploy — from the project's detected toolchain); `vscode.run_task {label}` partially covers this. |
+| [x] | Project surface | ProjectCard on the Surface tab when `context.project` is active — nested under the app surface, per the Tact Surface model. |
 | [ ] | Project presets | Save a project-specific workspace configuration. |
 
-**Status: ~10% COMPLETE** — Spotify transport + volume live; profile framework, app launcher, window/workspace control, project workspace pending.
+**Status: ~70% COMPLETE** — full app-surface set live (VS Code Run/Debug/Test/Open File, Chrome nav, Teams meeting controls, Spotify), App Launcher tab (3.8), Window/Workspace controls + layout presets (3.9), Project Workspace card + resources (3.10). Remaining: Terminal jobs (3.3), build/test state, CDP state card, gestures (3.7).
 
 ---
 
@@ -458,20 +459,20 @@ TACT
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [x] | Volume | Slider + mute. Already implemented (`system.volume`, pactl). |
-| [~] | Media | Now-playing title + transport (◀ ▶/❚❚ ▶) — move from `media_tab.dart` into the persistent strip widget. |
-| [ ] | Brightness | Slider via `xrandr --brightness` (or `/sys/class/backlight/*/brightness`); range slider + % label. |
-| [ ] | Lock | One-tap lock (`system.lock_screen`). |
-| [ ] | Screenshot | One-tap screenshot (`system.screenshot`), optionally preview on phone. |
-| [ ] | Dim | Reduce screen brightness below hardware minimum (xrandr overlay). |
-| [ ] | Expandable sheets | Tap a strip item → bottom sheet with the full control (volume: slider + mute; brightness: slider; media: full transport + seek). |
+| [x] | Volume | Compact slider + mute in the persistent strip and the expandable sheet (`system.volume`, pactl). |
+| [~] | Media | Transport (▶ play/pause) lives in the strip; now-playing title remains in the Media tab — full title card in the sheet pending. |
+| [x] | Brightness | Slider via `xrandr --brightness` overlay; get+set live (`system.brightness`); % label in the sheet. |
+| [x] | Lock | One-tap lock (`system.lock_screen`) in the strip. |
+| [x] | Screenshot | One-tap screenshot (`system.screenshot`) in the strip. |
+| [ ] | Dim | Reduce screen brightness below hardware minimum — the xrandr overlay covers 0–100% already; explicit "dim" mode pending. |
+| [x] | Expandable sheets | Tap volume in the strip → bottom sheet with volume + brightness sliders and the audio-output switcher. |
 
 ### 4.2 🎛 Quick app switcher
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Pinned apps row | Persistent access to a few pinned applications (small row in the strip, launch or focus via `system.open_*` + window focus). |
-| [ ] | Recent-app rotation | Optionally rotate in the most recently used app from Context Engine history. |
+| [~] | Pinned apps row | The Apps tab is the launcher (all apps + recent); a compact pinned row *inside the strip itself* pending. |
+| [~] | Recent-app rotation | Recent row in the Apps tab from Context Engine history (`context.recent_apps`); rotating the strip's pinned slot pending. |
 
 ### 4.3 🎛 Audio output switcher
 
@@ -479,10 +480,10 @@ From the review mentioning switching between audio devices (headphones ↔ speak
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Audio output device switching | List sink devices (`pactl list short sinks`) + one-tap switch (Bluetooth headset → speakers → HDMI). |
+| [x] | Audio output device switching | `system.sinks` (pactl `list short sinks` + default) rendered as ChoiceChips in the Control Strip sheet; `system.set_sink` switches with one tap. |
 | [ ] | Microphone device switching | Same for sources (`pactl list short sources`) — Phase 9 external controls too. |
 
-**Status: ~40% COMPLETE** — volume done; media partially done (needs relocation); brightness/lock/screenshot/dim need strip UI; app switcher + audio output switcher pending.
+**Status: ~70% COMPLETE** — persistent Control Strip live on every tab (volume slider, play/pause, lock, screenshot) with an expandable sheet for volume + brightness + audio-output switching. Remaining: now-playing title in the strip, pinned quick-switcher row, mic switching.
 
 ---
 
@@ -505,10 +506,10 @@ From the review mentioning switching between audio devices (headphones ↔ speak
 | [ ] | Running tasks | Builds, scripts, downloads, training jobs, etc. with status + elapsed (feeds from Phase 9 process monitor / terminal jobs). |
 | [~] | Media state | Currently playing/paused media — data live (`media.status`); glanceable card pending (Media tab only today). |
 | [ ] | Meeting state | Current meeting / muted / camera / sharing state when applicable (feeds from Phase 9 meeting controls). |
-| [~] | Connection state | Laptop online/offline — pairing `last_seen` exists; phone-side "online / updated Xs ago" indicator pending. |
+| [~] | Connection state | Laptop online/offline — pairing `last_seen` exists; phone-side **"updated Xs ago" staleness chip is live** in the Surface tab glance row (accent-colored when stale). |
 | [ ] | Build state | ✓ PASS / ✕ FAILED / ● RUNNING + last run time. Feed from VS Code task output (Phase 1/3) or a shell runner. |
 | [ ] | Test state | `124/124` + failed counts. Feed from test runner output parsing. |
-| [~] | Docker state | Per-container ● running / ✕ stopped / ⚠ restarting — data live (`docker.status`), glanceable widget pending. |
+| [~] | Docker state | Per-container ● running / ✕ stopped / ⚠ restarting — data live (`docker.status`), glanceable chip in the Surface tab glance row. |
 | [ ] | CI state | Eventually: `● Running · lint ✓ tests ✓ build ●` (Phase 9). |
 | [ ] | Unified state widget | One row/card rendering all of the above with the shared status palette: `✓ HEALTHY / ● RUNNING / ⚠ ATTENTION / ✕ FAILED`. |
 
@@ -518,9 +519,9 @@ From the review mentioning switching between audio devices (headphones ↔ speak
 | ------ | ---- | ----------- |
 | [x] | Snapshot state | `snapshot_state()` broadcasts system/media/workspace/actions. |
 | [ ] | State-diff broadcasting | Only push changed state sections to reduce bandwidth (state-changing actions already re-broadcast). |
-| [ ] | Staleness indicator | Show "updated Xs ago" so the developer trusts the data. |
+| [x] | Staleness indicator | "updated Xs ago" chip live in the Surface tab glance row (from `TactStateNotifier.lastUpdated`). |
 
-**Status: ~50% COMPLETE** — context (app/project/branch) + git + battery + media data live; running tasks / meeting / connection / build / test / CI widgets pending.
+**Status: ~60% COMPLETE** — context (app/project/branch) + git + battery + docker chips + staleness live in the glance row; running tasks / meeting / build / test / CI widgets pending.
 
 ---
 
@@ -806,4 +807,4 @@ The reviews tempt you to add everything. These are proofs of breadth, not things
 | **B** | Developer state + events: Build / Tests / Docker / Git / CI + actionable events | Phases 5, 6 |
 | **C** | Daily utility: Clipboard + Snippets, Brightness, Dim, Open App, Lock, Wake | Phases 4, 7 |
 
-**Immediate next work:** the **Context Engine is live** (`context.status/override`, `context.changed`, phone ContextBanner). Next: Phase 2 signal aggregation, then wire the **VS Code surface** + **Control Strip** onto a single screen (Phase 3–4) — that one screen demonstrates the entire product concept. After the profile framework lands, the Stream Deck-derived layers are cheap to add since they reuse existing backend pieces: app launcher (3.8) and window/workspace control (3.9) build on `system.open_*` + `wmctrl`; project workspace (3.10) builds on Phase 2 context resolution; Workflows & Macros (Phase 8) compose registered actions. Codebase is modular: one integration file per capability (`tact/agent/integrations/README.md`).
+**Immediate next work:** Phase 3 is ~70% shipped — the full app-surface set (VS Code Run/Debug/Test, Chrome nav, Teams meeting controls, Spotify), **App Launcher tab**, **window/workspace layout presets**, and the **project workspace card** are all live, and the **Phase 4 Control Strip** (volume/brightness/audio-output sheet) sits on every tab. Natural next iterations: Terminal surface jobs + process monitor (3.3, feeds Phase 5 running tasks), build/test state cards (3.2, 5.1), contextual gestures (3.7), then **Phase 6 actionable events** (build failure → `[View Logs] [Re-run]`) and **Phase 8 Workflows & Macros** (compose `project.open`-style sequences from the registry — the stream-deck multi-action pattern). Codebase stays modular: one integration file per capability (`tact/agent/integrations/README.md`).

@@ -6,11 +6,14 @@ import '../../state/telemetry_provider.dart';
 import '../../theme.dart';
 import '../../widgets/gauge.dart';
 import '../actions/actions_grid.dart';
+import '../apps/apps_tab.dart';
 import '../clipboard/clipboard_card.dart';
 import '../context/context_banner.dart';
 import '../developer/developer_tab.dart';
 import '../events/event_feed.dart';
 import '../media/media_tab.dart';
+import '../strip/control_strip.dart';
+import '../surface/surface_tab.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -38,6 +41,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: IndexedStack(
                     index: _tab,
                     children: const [
+                      SurfaceTab(),
+                      AppsTab(),
                       _SystemTab(),
                       DeveloperTab(),
                       MediaTab(),
@@ -47,14 +52,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ],
             ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (index) => setState(() => _tab = index),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.monitor), label: 'System'),
-          NavigationDestination(icon: Icon(Icons.developer_mode), label: 'Developer'),
-          NavigationDestination(icon: Icon(Icons.headphones), label: 'Media'),
-          NavigationDestination(icon: Icon(Icons.notifications), label: 'Events'),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ControlStrip(),
+          NavigationBar(
+            selectedIndex: _tab,
+            onDestinationSelected: (index) => setState(() => _tab = index),
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.bolt), label: 'Surface'),
+              NavigationDestination(icon: Icon(Icons.apps), label: 'Apps'),
+              NavigationDestination(icon: Icon(Icons.monitor), label: 'System'),
+              NavigationDestination(icon: Icon(Icons.developer_mode), label: 'Developer'),
+              NavigationDestination(icon: Icon(Icons.headphones), label: 'Media'),
+              NavigationDestination(icon: Icon(Icons.notifications), label: 'Events'),
+            ],
+          ),
         ],
       ),
     );

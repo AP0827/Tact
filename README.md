@@ -11,8 +11,13 @@ There are three moving parts:
 ## What this contains
 
 - FastAPI desktop agent with WebSocket server and HTTP pairing API
-- **Allowlisted action registry** — 42 actions across 7 integrations (`system`, `vscode`, `git`, `media`, `docker`, `clipboard`, `context`); every action runs through the registry, nothing is ad-hoc
-- **Context Engine** — detects the focused application, resolves the active project + git branch, classifies the workflow, and pushes `context.changed` events so the phone surface can react
+- **Allowlisted action registry** — ~90 actions across 11 integrations (`system`, `vscode`, `git`, `media`, `docker`, `clipboard`, `context`, `chrome`, `teams`, `window`, `project`); every action runs through the registry, nothing is ad-hoc
+- **Context Engine** — detects the focused application, resolves the active project + git branch, classifies the workflow via signal aggregation (git/docker), tracks recent apps, and pushes `context.changed` events so the phone surface can react
+- **Context surfaces** — the phone's first tab renders the active surface (VS Code Run/Debug/Test, Chrome nav, Teams meeting controls, Spotify transport, Desktop fallback) with a live state card, project card, and workspace glance row
+- **App Launcher tab** — known apps grouped into Development/Communication/Media with running indicators, one-tap launch or focus, recent-apps row
+- **Window & workspace controls** — focus/move/minimize/maximize/close plus Coding/Meeting/Media layout presets (wmctrl)
+- **Project workspace** — one-tap `project.open` (VS Code + terminal + folder) and per-project resource buttons on the surface
+- **Persistent Control Strip** — compact bar on every tab (volume slider, play/pause, lock, screenshot) with an expandable sheet for volume, brightness (xrandr), and audio-output switching (pactl sinks)
 - **Integration pattern** — folder-per-capability separation (`tact/agent/integrations/<name>/`), each integration contributing `actions()`, `snapshot()`, and optionally `monitor()`; see `tact/agent/integrations/README.md`
 - System telemetry (CPU, RAM, disk, battery, volume) with circular gauges on the phone
 - Git state, tree visualization, branch switching, pull/push/commit, commit graph
@@ -22,7 +27,7 @@ There are three moving parts:
 - VS Code open-workspace detection and recent-workspaces dropdown
 - Secure local pairing with 6-digit OTP and laptop-side approval; device tokens persisted in `~/.tact/config.json`
 - Event bus with severity levels, actionable payloads, and a phone-side event feed
-- Flutter phone client (context banner + System / Developer / Media / Events tabs)
+- Flutter phone client (context surface + Apps / System / Developer / Media / Events tabs)
 - Flutter host companion tray app (OTP display, pairing approvals, agent port config)
 - mDNS agent discovery on the client (agent-side advertisement pending)
 - Single-file web client fallback served by the agent
@@ -37,8 +42,8 @@ sudo apt install git playerctl xdotool wmctrl xclip x11-utils pactl
 
 - **git** — required for all git actions (`status`, `branches`, `tree`, `log`, `add`, `pull`, `push`, `switch_branch`, `commit`).
 - **playerctl** — primary media transport (MPRIS). Controls Spotify, browser media sessions (Chrome/Chromium/Firefox), VLC, etc. Without it the agent reports `media.status` unavailable.
-- **xdotool** — media-key fallback (XF86Audio Play/Next/Prev) when a player's MPRIS registration is unreliable (snap Spotify), and window/keystroke helpers.
-- **wmctrl** — window focus/activation (`media.open_spotify` focuses the launched window).
+- **xdotool** — media-key fallback (XF86Audio Play/Next/Prev) when a player's MPRIS registration is unreliable (snap Spotify), Chrome surface browser nav, and Teams meeting key combos.
+- **wmctrl** — window focus/activation (`media.open_spotify`, `system.focus_app`, `teams.*`), the Apps tab running-state list, and all `window.*` controls + layout presets.
 - **xclip** — clipboard read (with `xsel`/`wl-paste` fallbacks) and the image-clipboard capability probe.
 - **x11-utils** — `xprop` used by the Context Engine for active-window detection (X11; detection is unavailable under Wayland/headless).
 
@@ -115,6 +120,36 @@ Update these in `app/android/gradle/wrapper/gradle-wrapper.properties` and
 ```bash
 cd app && flutter build apk --debug   # verify the Android build compiles
 ```
+
+#### Previewing the phone UI on the laptop (Flutter web)
+
+No phone or recompile-per-change needed — the same `lib/main.dart` runs as a web
+app in the laptop's browser with hot reload. Web support is already checked in
+(`app/web/`).
+
+```bash
+cd app
+flutter run -d chrome        # opens the app in Chrome; r = hot reload, R = hot restart
+flutter run -d web-server --web-port 8080   # headless; open http://localhost:8080 yourself
+```
+
+To emulate a phone viewport, open Chrome DevTools (**Ctrl+Shift+M**) and pick a
+device size. The app pairs against the local agent like any client: host
+`localhost`, port `8000`, OTP from the agent startup log, then approve at
+`http://localhost:8000/admin/pair/pending`. `flutter run -d web-server` also
+serves the LAN, so a phone browser can load it without an APK install.
+
+#### Stopping the agent and dev server
+
+Kill by PID to be safe — `pkill -f 'tact.agent'` / `pkill -f flutter` patterns
+can match the terminal running the command itself.
+
+```bash
+kill $(pgrep -f 'python3 -m tact.agent')     # stop the agent
+kill $(pgrep -f 'flutter_tools.snapshot run') # stop the Flutter dev server
+```
+
+The agent prints a fresh OTP on every (re)start, so re-pair after restarting it.
 
 ### 3. Host companion (desktop tray app)
 
@@ -198,9 +233,13 @@ All actions are allowlisted in the agent and dispatched by `ActionRegistry`:
 - `system.open_terminal`, `system.open_project`
 - `system.volume` (get/set 0–100), `system.volume_up`, `system.volume_down`, `system.mute`
 - `system.lock_screen`, `system.screenshot`, `system.battery`
+- `system.apps` (registry + running state), `system.open_app` (launch + focus), `system.focus_app`
+- `system.brightness` (get/set, xrandr overlay), `system.sinks` (audio outputs), `system.set_sink` (switch default sink)
 
 **vscode**
 - `vscode.open_workspace`, `vscode.status`, `vscode.workspaces`
+- `vscode.run_task` (run a task; no label → VS Code task picker), `vscode.debug`, `vscode.test`
+- `vscode.open_file` (`--goto path:line`)
 
 **git**
 - `git.status` (branch, clean/dirty, ahead/behind, changed files)
@@ -222,8 +261,69 @@ All actions are allowlisted in the agent and dispatched by `ActionRegistry`:
 
 **context**
 - `context.status`, `context.override`, `context.clear_override`
+- `context.surfaces` (list registered surfaces), `context.surface` (current surface)
 
-The current registry (42 actions) is also published in every state snapshot under `actions`, so clients can render dynamic action grids.
+**chrome** (xdotool keys to the focused window — safe because the Context Engine guarantees Chrome is active)
+- `chrome.back`, `chrome.forward`, `chrome.refresh`, `chrome.new_tab`, `chrome.close_tab`
+- `chrome.reopen_tab`, `chrome.copy_url` (select + copy), `chrome.devtools`
+
+**teams**
+- `teams.mute` (Ctrl+Shift+M), `teams.camera` (Ctrl+Shift+O), `teams.share` (Ctrl+Shift+E), `teams.leave` (Ctrl+Shift+B) — wmctrl-focus + xdotool
+
+**window**
+- `window.list` (running windows from `wmctrl -lx`), `window.focus`, `window.move` (desktop + geometry)
+- `window.minimize`, `window.maximize`, `window.close`
+- `window.layouts` (Coding / Meeting / Media presets), `window.apply_layout`
+
+**project**
+- `project.open` (composite: VS Code + terminal + file manager at the path)
+- `project.resources` (per-project buttons incl. the resolved git remote URL)
+
+The current registry is also published in every state snapshot
+under `actions`, so clients can render dynamic action grids.
+
+## Context surfaces
+
+The phone's first tab renders the **active surface** from
+`snapshot.context.surface` — a header (app icon, title, workflow chip, pin
+toggle), the surface's own action grid (VS Code: Run Task/Debug/Test/Open
+File + git; Chrome/Edge/Firefox: back/forward/refresh/tabs/copy URL; Teams:
+mute/camera/share/leave; Spotify: transport), a live state card (git status,
+now-playing), a **project card** (one-tap `project.open` environment +
+workspace/terminal/browser/folder/repo resources), and a compact workspace
+glance row (docker, battery, branch, staleness). Unknown apps and unavailable
+detection fall back to the "Desktop" surface so the tab is never empty.
+Surfaces live in `tact/agent/integrations/context/surfaces.py` and each
+button maps to an allowlisted registry action.
+
+## App launcher & window controls
+
+The **Apps tab** lists known apps grouped into Development / Communication /
+Media (`system.apps`, running state from `wmctrl -lx`) with a green running
+dot — tap launches (`system.open_app`, with a focus-after-launch poll) or
+focuses a running instance (`system.focus_app`). A Recent row feeds from the
+Context Engine's app history (`context.recent_apps`). Below, the window
+section lists every open window with focus/minimize/maximize/close buttons
+(`window.*`, wmctrl) and **workspace layout presets** — Coding (VS Code +
+terminal + Chrome), Meeting (Teams + Chrome), Media (Spotify + Chrome) —
+applied with one tap via `window.apply_layout`.
+
+## Project workspace
+
+When the Context Engine resolves a project, the Surface tab shows a project
+card: **Open environment** runs the `project.open` composite (VS Code +
+terminal at the project path + file manager) and resource chips (Workspace,
+Terminal, Browser, Folder, and the GitHub repo URL resolved from the git
+remote) reuse existing actions.
+
+## Control Strip
+
+A compact persistent bar sits above the navigation bar on **every tab**:
+volume slider, play/pause, screenshot, and lock. Tapping the volume icon
+expands a bottom sheet with full sliders for volume and brightness
+(`system.brightness`, xrandr overlay) plus the **audio output switcher**
+(`system.sinks` / `system.set_sink` — switch between speakers, HDMI,
+Bluetooth with one tap).
 
 ## Media controls
 
@@ -294,12 +394,16 @@ tact/                        # Python desktop agent
 │   ├── ws_manager.py
 │   └── integrations/        # folder-per-capability pattern (see its README)
 │       ├── base.py          # Integration contract: actions() / snapshot() / monitor()
-│       ├── system/          # OS actions: volume, lock, screenshot, battery, open_*
-│       ├── vscode/          # workspace detection + open/status
+│       ├── system/          # OS actions: volume, lock, screenshot, battery, open_*, apps, brightness, sinks
+│       ├── vscode/          # workspace detection + run/debug/test/open_file
 │       ├── git/             # status/branches/tree/log + commit ops (state.py: parsing)
 │       ├── media/           # MPRIS transport + xdotool fallback, open_spotify
 │       ├── docker/          # container status + lifecycle + logs
 │       ├── clipboard/       # get/set/history
+│       ├── chrome/          # browser nav via xdotool keys (focused window)
+│       ├── teams/           # meeting controls (wmctrl-focus + xdotool combos)
+│       ├── window/          # wmctrl window controls + layout presets
+│       ├── project/         # composite project-environment launcher + resources
 │       └── context/         # Context Engine (apps.py: APP_MAP, detection.py: X11 probe)
 app/                         # Flutter client
 ├── lib/
@@ -308,8 +412,10 @@ app/                         # Flutter client
 │   ├── protocol/message.dart
 │   ├── services/            # tact_client (WS), pairing, discovery (mDNS)
 │   ├── state/               # Riverpod providers (connection, telemetry)
-│   ├── features/            # dashboard, context banner, actions, developer, media,
-│   │                        # docker, clipboard, events, git, vscode
+│   ├── features/            # dashboard (Surface/Apps/System/Developer/Media/Events),
+│   │                        # surface (context surface + project card + glance row),
+│   │                        # apps (launcher + window controls), strip (control strip),
+│   │                        # actions, developer, media, docker, clipboard, events, git, vscode
 │   ├── host/                # tray controller, status service, settings
 │   └── billing/             # entitlements (all unlocked for now)
 ├── android/ ios/ linux/ macos/ windows/
@@ -317,7 +423,7 @@ client/
 └── index.html               # single-file web client fallback
 tests/                       # agent tests
 ├── test_domain.py
-└── test_integrations.py     # 43 tests, pytest
+└── test_integrations.py     # 75 tests, pytest
 docs/
 └── PHASE_TRACKER.md         # roadmap + status per phase
 ```
@@ -325,7 +431,7 @@ docs/
 ## Tests
 
 ```bash
-python3 -m pytest tests/ -q        # agent unit tests (43 passing)
+python3 -m pytest tests/ -q        # agent unit tests (75 passing)
 cd app && flutter test             # Flutter widget smoke test
 ```
 
@@ -345,9 +451,11 @@ all tabs.
 ## Roadmap
 
 The full roadmap lives in `docs/PHASE_TRACKER.md` (phases 0–14, per-item
-status, priorities). In brief: the Context Engine (phase 2) is live; next is
-phase 3 — application surfaces / profiles (contextual action sets per app,
-app launcher, window/workspace controls, project workspace), then the
-persistent control strip, glanceable state, and actionable events. Every
-phase builds on the same integration pattern: one folder + one registry line
-per capability.
+status, priorities). In brief: the Context Engine (phase 2) and the full
+Phase 3 surface set (VS Code Run/Debug/Test, Chrome nav, Teams meeting
+controls, app launcher, window/workspace layout presets, project workspace)
+are live, along with the Phase 4 persistent Control Strip (volume, brightness,
+audio-output switching). Next are the Terminal surface jobs, build/test state
+cards, contextual gestures, then actionable events (phase 6) and workflows &
+macros (phase 8). Every phase builds on the same integration pattern: one
+folder + one registry line per capability.

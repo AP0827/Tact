@@ -17,12 +17,14 @@ import json
 import os
 import re
 import urllib.parse
+from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
 from ..base import Integration, payload_str
 from .apps import classify, map_app
 from .detection import active_window
+from .surfaces import select_surface, surfaces_meta
 from ..git import GitIntegration
 
 
@@ -37,6 +39,8 @@ class ContextIntegration(Integration):
         self._git = GitIntegration()
         self._override: dict[str, str] = {}
         self._last_key: tuple | None = None
+        # Rolling app history for the launcher's "Recent" row (Phase 3.8).
+        self._app_history: deque[str] = deque(maxlen=6)
 
     # -- actions ----------------------------------------------------------
 
@@ -47,6 +51,8 @@ class ContextIntegration(Integration):
                 payload_str(p, "app"), payload_str(p, "project")
             ),
             "clear_override": lambda p: self.clear_override(),
+            "surfaces": lambda p: self.surfaces(),
+            "surface": lambda p: self.surface(),
         }
 
     def snapshot(self) -> dict[str, Any]:
@@ -56,7 +62,8 @@ class ContextIntegration(Integration):
 
     def detect(self) -> dict[str, Any]:
         window = active_window()
-        if window is None and not self._override:
+        available = window is not None or bool(self._override)
+        if not available:
             return {
                 "available": False,
                 "error": "window_detection_unavailable",
@@ -64,6 +71,8 @@ class ContextIntegration(Integration):
                 "active_app": None,
                 "project": None,
                 "branch": None,
+                "surface": select_surface(None, available=False),
+                "surfaces": surfaces_meta(),
             }
 
         app_raw = window.get("class") if window else None
@@ -72,18 +81,75 @@ class ContextIntegration(Integration):
 
         if self._override.get("app"):
             app = self._override["app"]
+        if app:
+            self._remember_app(app)
         project = self._override.get("project") or self._resolve_project(app, title)
+        branch = self._project_branch(project)
+        docker_running = self._docker_signal()
 
         return {
-            "available": window is not None or bool(self._override),
+            "available": True,
             "active_app": app,
             "active_app_raw": app_raw,
             "window_title": title,
             "project": project,
-            "branch": self._project_branch(project),
-            "workflow": classify(app),
+            "branch": branch,
+            "workflow": self._workflow(app, branch, docker_running),
+            "signals": {
+                "git_active": branch is not None,
+                "docker_running": docker_running,
+            },
             "override": dict(self._override) or None,
+            "recent_apps": list(self._app_history),
+            "surface": select_surface(app, available=True),
+            "surfaces": surfaces_meta(),
         }
+
+    def surfaces(self) -> dict[str, Any]:
+        return {"ok": True, "surfaces": surfaces_meta()}
+
+    def _remember_app(self, app: str) -> None:
+        """Keep the most recent distinct apps (most-recent last)."""
+        if app in self._app_history:
+            self._app_history.remove(app)
+        self._app_history.append(app)
+
+    def surface(self) -> dict[str, Any]:
+        return {"ok": True, "surface": self.detect().get("surface")}
+
+    # -- workflow signal aggregation (Phase 2) ---------------------------
+
+    def _workflow(
+        self,
+        app: Optional[str],
+        branch: Optional[str],
+        docker_running: bool,
+    ) -> Optional[str]:
+        """Workflow = active-app map first; unknown/neutral apps fall back
+        to signal aggregation: an active git repo or running docker
+        containers means development is happening."""
+        base = classify(app)
+        if base:
+            return base
+        if branch is not None or docker_running:
+            return "development"
+        return None
+
+    def _docker_signal(self) -> bool:
+        """True when docker has at least one running container. Uses the
+        shared docker integration instance (wired by ActionRegistry) so the
+        state monitor's view stays consistent."""
+        docker = getattr(self, "_docker", None)
+        if docker is None:
+            return False
+        try:
+            state = docker.containers()
+        except Exception:
+            return False
+        return bool(
+            state.get("available")
+            and any(c.get("state") == "running" for c in state.get("containers", []))
+        )
 
     def set_override(self, app: Optional[str], project: Optional[str]) -> dict[str, Any]:
         if not app and not project:

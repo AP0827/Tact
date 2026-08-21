@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../state/connection_provider.dart';
 import '../../state/telemetry_provider.dart';
 import 'action_button.dart';
+import 'open_url_button.dart';
+import 'prompt_button.dart';
 
 const _knownSystemActions = <String, (String, IconData)>{
   'system.lock_screen': (
@@ -74,7 +75,16 @@ class ActionsGrid extends ConsumerWidget {
             _knownSystemActions[id]!;
 
         if (id == 'system.open_url') {
-          return _OpenUrlButton(
+          return OpenUrlButton(
+            label: config.$1,
+            icon: config.$2,
+          );
+        }
+        if (id == 'vscode.open_file') {
+          return PromptButton(
+            actionId: id,
+            field: 'path',
+            hint: '/path/to/file.dart:line',
             label: config.$1,
             icon: config.$2,
           );
@@ -86,84 +96,6 @@ class ActionsGrid extends ConsumerWidget {
           icon: config.$2,
         );
       },
-    );
-  }
-}
-
-/// Prompts for a URL before firing `system.open_url` — mirrors the web
-/// client which hardcodes an example URL otherwise.
-class _OpenUrlButton extends ConsumerStatefulWidget {
-  const _OpenUrlButton({
-    required this.label,
-    required this.icon,
-  });
-
-  final String label;
-  final IconData icon;
-
-  @override
-  ConsumerState<_OpenUrlButton> createState() =>
-      _OpenUrlButtonState();
-}
-
-class _OpenUrlButtonState
-    extends ConsumerState<_OpenUrlButton> {
-  final _urlController = TextEditingController();
-
-  @override
-  void dispose() {
-    _urlController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _open() async {
-    final url = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Open URL'),
-        content: TextField(
-          controller: _urlController,
-          autofocus: true,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            labelText: 'https://…',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(_urlController.text.trim()),
-            child: const Text('Open'),
-          ),
-        ],
-      ),
-    );
-
-    if (url == null || url.isEmpty || !mounted) return;
-
-    try {
-      await ref
-          .read(tactClientProvider)
-          .sendAction('system.open_url', {'url': url});
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$e')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ActionButton(
-      actionId: 'system.open_url',
-      label: widget.label,
-      icon: widget.icon,
-      onPressed: _open,
     );
   }
 }
