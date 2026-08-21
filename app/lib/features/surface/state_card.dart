@@ -23,13 +23,18 @@ class SurfaceStateCard extends ConsumerWidget {
     return switch (kind) {
       'git' => _GitCard(state: state),
       'media' => _MediaCard(state: state),
+      'terminal' => _TerminalCard(state: state),
       _ => const SizedBox.shrink(),
     };
   }
 }
 
 class _CardShell extends StatelessWidget {
-  const _CardShell({required this.title, required this.icon, required this.child});
+  const _CardShell({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
 
   final String title;
   final IconData icon;
@@ -55,10 +60,10 @@ class _CardShell extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppTheme.primary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
               ),
             ],
           ),
@@ -88,32 +93,50 @@ class _GitCard extends StatelessWidget {
     final ahead = git['ahead'] as int? ?? 0;
     final behind = git['behind'] as int? ?? 0;
 
-    return _CardShell(title: 'Git status', icon: Icons.call_split, child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            _chip(
-              icon: Icons.alt_route,
-              label: branch ?? 'no branch',
-              color: AppTheme.primary,
-            ),
-            if (dirty)
+    return _CardShell(
+      title: 'Git status',
+      icon: Icons.call_split,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
               _chip(
-                icon: Icons.edit,
-                label: '$changed changed',
-                color: AppTheme.accent,
-              )
-            else
-              _chip(icon: Icons.check, label: 'clean', color: AppTheme.success),
-            if (ahead > 0) _chip(icon: Icons.arrow_upward, label: '$ahead ahead', color: AppTheme.success),
-            if (behind > 0) _chip(icon: Icons.arrow_downward, label: '$behind behind', color: AppTheme.muted),
-          ],
-        ),
-      ],
-    ));
+                icon: Icons.alt_route,
+                label: branch ?? 'no branch',
+                color: AppTheme.primary,
+              ),
+              if (dirty)
+                _chip(
+                  icon: Icons.edit,
+                  label: '$changed changed',
+                  color: AppTheme.accent,
+                )
+              else
+                _chip(
+                  icon: Icons.check,
+                  label: 'clean',
+                  color: AppTheme.success,
+                ),
+              if (ahead > 0)
+                _chip(
+                  icon: Icons.arrow_upward,
+                  label: '$ahead ahead',
+                  color: AppTheme.success,
+                ),
+              if (behind > 0)
+                _chip(
+                  icon: Icons.arrow_downward,
+                  label: '$behind behind',
+                  color: AppTheme.muted,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -135,35 +158,107 @@ class _MediaCard extends StatelessWidget {
     final artist = active['artist'] as String?;
     final playing = status == 'Playing';
 
-    return _CardShell(title: 'Now playing', icon: Icons.music_note, child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        if (artist != null && artist.isNotEmpty) ...[
-          const SizedBox(height: 2),
+    return _CardShell(
+      title: 'Now playing',
+      icon: Icons.music_note,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            artist,
+            title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (artist != null && artist.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              artist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
+            ),
+          ],
+          const SizedBox(height: 8),
+          _chip(
+            icon: playing ? Icons.pause_circle : Icons.play_circle,
+            label: playing ? 'Playing' : 'Paused',
+            color: playing ? AppTheme.success : AppTheme.muted,
           ),
         ],
-        const SizedBox(height: 8),
-        _chip(
-          icon: playing ? Icons.pause_circle : Icons.play_circle,
-          label: playing ? 'Playing' : 'Paused',
-          color: playing ? AppTheme.success : AppTheme.muted,
-        ),
-      ],
-    ));
+      ),
+    );
+  }
+}
+
+/// Terminal card: the window title (most terminals put the running command
+/// there), plus project + branch from the Context Engine. Real job tracking
+/// (name + elapsed) lands with Phase 9 terminal jobs.
+class _TerminalCard extends StatelessWidget {
+  const _TerminalCard({required this.state});
+
+  final Map<String, dynamic> state;
+
+  @override
+  Widget build(BuildContext context) {
+    final contextData = (state['context'] as Map?)?.cast<String, dynamic>();
+    if (contextData == null || contextData['available'] != true) {
+      return const SizedBox.shrink();
+    }
+
+    final title = contextData['window_title'] as String? ?? '';
+    final project = contextData['project'] as String?;
+    final branch = contextData['branch'] as String?;
+    final projectName =
+        project == null
+            ? null
+            : (project.split('/').last.isEmpty
+                ? project
+                : project.split('/').last);
+
+    return _CardShell(
+      title: 'Terminal',
+      icon: Icons.terminal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.isEmpty ? 'Focused terminal' : title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.onSurface,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              if (projectName != null)
+                _chip(
+                  icon: Icons.folder,
+                  label: projectName,
+                  color: AppTheme.primary,
+                ),
+              if (branch != null)
+                _chip(
+                  icon: Icons.alt_route,
+                  label: branch,
+                  color: AppTheme.success,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -186,7 +281,11 @@ Widget _chip({
         const SizedBox(width: 4),
         Text(
           label,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
         ),
       ],
     ),

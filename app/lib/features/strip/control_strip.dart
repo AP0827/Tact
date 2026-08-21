@@ -31,8 +31,7 @@ class _ControlStripState extends ConsumerState<ControlStrip> {
       await ref.read(tactClientProvider).sendAction(action, payload);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -70,10 +69,11 @@ class _ControlStripState extends ConsumerState<ControlStrip> {
                   max: 100,
                   activeColor: AppTheme.primary,
                   inactiveColor: AppTheme.primary.withValues(alpha: 0.2),
-                  onChanged: (v) => setState(() {
-                    _localVolume = v;
-                    _volumeDragging = true;
-                  }),
+                  onChanged:
+                      (v) => setState(() {
+                        _localVolume = v;
+                        _volumeDragging = true;
+                      }),
                   onChangeEnd: (v) {
                     setState(() => _volumeDragging = false);
                     _send('system.volume', {'value': v.round()});
@@ -119,7 +119,11 @@ class _StripIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
+        icon: Icon(
+          icon,
+          size: 20,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
         onPressed: onTap,
       ),
     );
@@ -129,7 +133,7 @@ class _StripIconButton extends StatelessWidget {
 /// Expanded control sheet: volume + brightness sliders and audio outputs.
 class _ControlSheet extends ConsumerStatefulWidget {
   final Future<void> Function(String action, [Map<String, dynamic>? payload])
-      onSend;
+  onSend;
 
   const _ControlSheet({required this.onSend});
 
@@ -156,8 +160,13 @@ class _ControlSheetState extends ConsumerState<_ControlSheet> {
     final state = ref.watch(tactStateProvider);
     final system = (state?['system'] as Map?)?.cast<String, dynamic>();
     final sinks = (system?['sinks'] as List?) ?? const [];
+    final sources = (system?['sources'] as List?) ?? const [];
     final volume = _value('volume', _localVolume, _volumeDragging);
-    final brightness = _value('brightness', _localBrightness, _brightnessDragging);
+    final brightness = _value(
+      'brightness',
+      _localBrightness,
+      _brightnessDragging,
+    );
 
     return Padding(
       padding: EdgeInsets.only(
@@ -173,10 +182,11 @@ class _ControlSheetState extends ConsumerState<_ControlSheet> {
             icon: Icons.volume_up,
             label: 'Volume',
             value: volume,
-            onChanged: (v) => setState(() {
-              _localVolume = v;
-              _volumeDragging = true;
-            }),
+            onChanged:
+                (v) => setState(() {
+                  _localVolume = v;
+                  _volumeDragging = true;
+                }),
             onChangeEnd: (v) {
               setState(() => _volumeDragging = false);
               widget.onSend('system.volume', {'value': v.round()});
@@ -192,10 +202,11 @@ class _ControlSheetState extends ConsumerState<_ControlSheet> {
             icon: Icons.brightness_6,
             label: 'Brightness',
             value: brightness,
-            onChanged: (v) => setState(() {
-              _localBrightness = v;
-              _brightnessDragging = true;
-            }),
+            onChanged:
+                (v) => setState(() {
+                  _localBrightness = v;
+                  _brightnessDragging = true;
+                }),
             onChangeEnd: (v) {
               setState(() => _brightnessDragging = false);
               widget.onSend('system.brightness', {'value': v.round()});
@@ -203,8 +214,7 @@ class _ControlSheetState extends ConsumerState<_ControlSheet> {
           ),
           if (sinks.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text('Audio output',
-                style: Theme.of(context).textTheme.titleSmall),
+            Text('Audio output', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -217,9 +227,41 @@ class _ControlSheetState extends ConsumerState<_ControlSheet> {
                       style: const TextStyle(fontSize: 12),
                     ),
                     selected: sink['default'] == true,
-                    onSelected: (_) =>
-                        widget.onSend('system.set_sink', {
+                    onSelected:
+                        (_) => widget.onSend('system.set_sink', {
                           'sink': sink['name'],
+                        }),
+                  ),
+              ],
+            ),
+          ],
+          if (sources.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(Icons.mic, size: 16, color: AppTheme.muted),
+                const SizedBox(width: 6),
+                Text(
+                  'Microphone',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final source in sources.cast<Map>())
+                  ChoiceChip(
+                    label: Text(
+                      (source['name'] as String? ?? '?').split('.').last,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    selected: source['default'] == true,
+                    onSelected:
+                        (_) => widget.onSend('system.set_source', {
+                          'source': source['name'],
                         }),
                   ),
               ],
@@ -256,10 +298,12 @@ class _SliderRow extends StatelessWidget {
         const SizedBox(width: 8),
         SizedBox(
           width: 72,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  )),
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
         ),
         Expanded(
           child: Slider(
@@ -273,9 +317,11 @@ class _SliderRow extends StatelessWidget {
         ),
         SizedBox(
           width: 40,
-          child: Text('${value.round()}%',
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.bodySmall),
+          child: Text(
+            '${value.round()}%',
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
         if (trailing != null) trailing!,
       ],

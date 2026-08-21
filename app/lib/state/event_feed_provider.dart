@@ -40,13 +40,13 @@ class TactEventItem {
 /// Mirrors the web client's event log (`client/index.html`).
 final eventFeedProvider =
     StateNotifierProvider<EventFeedNotifier, List<TactEventItem>>((ref) {
-  final notifier = EventFeedNotifier();
-  final sub = ref.watch(tactClientProvider).messages.listen((msg) {
-    if (msg is TactEvent) notifier.add(msg.payload);
-  });
-  ref.onDispose(sub.cancel);
-  return notifier;
-});
+      final notifier = EventFeedNotifier();
+      final sub = ref.watch(tactClientProvider).messages.listen((msg) {
+        if (msg is TactEvent) notifier.add(msg.payload);
+      });
+      ref.onDispose(sub.cancel);
+      return notifier;
+    });
 
 class EventFeedNotifier extends StateNotifier<List<TactEventItem>> {
   EventFeedNotifier() : super(const []);
@@ -56,3 +56,7 @@ class EventFeedNotifier extends StateNotifier<List<TactEventItem>> {
     state = [item, ...state].take(100).toList();
   }
 }
+
+/// Keys (`type@timestamp`) of swipe-dismissed events. Dismissing only marks
+/// the feed row read — it does not dismiss the underlying state.
+final dismissedEventsProvider = StateProvider<Set<String>>((ref) => {});

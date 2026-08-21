@@ -133,7 +133,7 @@ Active App + Project + Current State + Recent Events → TACT SURFACE
 | 13 | Productization (beta / commercial / cloud) | V1.2 | Not started | — |
 | 14 | Physical Tact Hardware | V2.0 | Not started | — |
 
-**Current position:** Phases 0–2 complete (Context Engine ~95%); **Phase 3 Application Surfaces ~70% done** — the full app-surface set is live: VS Code Run/Debug/Test, Chrome browser nav (xdotool), Teams meeting controls, Spotify transport, **App Launcher** (3.8: known apps + running state + recent history + folders), **Window/Workspace Controls** (3.9: focus/move/minimize/maximize/close + Coding/Meeting/Media layout presets), **Project Workspace** (3.10: one-tap `project.open` environment + per-project resources on the Surface tab). **Phase 4 Control Strip is live** (compact persistent strip + expandable volume/brightness/audio-output sheet). Remaining: Terminal surface jobs (3.3), contextual gestures (3.7), build/test state cards, running tasks + meeting state (Phase 5), actionable events (Phase 6), workflows (Phase 8).
+**Current position:** Phases 0–2 complete (Context Engine ~95%); **Phase 3 Application Surfaces ~85% done** — the full app-surface set is live: VS Code Run/Debug/Test, Chrome browser nav (xdotool), Teams meeting controls, Spotify transport, **Terminal surface** (3.3: New/Clear/Rerun/Kill + terminal state card), **App Launcher** (3.8), **Window/Workspace Controls** (3.9), **Project Workspace** (3.10), and **contextual gestures** (3.7: swipe between surfaces, swipe media prev/next, swipe-to-dismiss events). **Phase 4 Control Strip ~85% live** (persistent strip + volume/brightness/audio-output/**microphone** sheet). Remaining: terminal jobs + copy output (Phase 9 feed), build/test state cards, running tasks + meeting state (Phase 5), actionable events (Phase 6), workflows (Phase 8).
 
 **Modularity note (built into Phase 2 work):** the agent runs on the Integration pattern with **folder-per-app separation** — `integrations/<name>/` (integration.py + helper files like state.py/apps.py/detection.py) registered explicitly in `ActionRegistry`, generic `StateMonitor`. Adding a capability (figma, video editing) is one new folder + one registry line; see `tact/agent/integrations/README.md`.
 
@@ -329,12 +329,12 @@ VS Code        Blender        Photoshop        Teams
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | New | Open a new terminal window at the current workspace (reuse `system.open_terminal`). |
-| [ ] | Clear | Send `clear` to the focused terminal (agent keys via `ydotool`/`xdotool` or a thin tty bridge). |
-| [ ] | Rerun | Repeat the last executed command (agent keeps a per-terminal command history). |
-| [ ] | Copy output | Copy the last command output to the clipboard. |
-| [ ] | Kill | Send Ctrl-C / close the running foreground job. |
-| [ ] | State card | Running job name + elapsed time (Phase 9 terminal jobs feed this). |
+| [x] | New | Open a new terminal window at the current workspace (reuse `system.open_terminal`). |
+| [x] | Clear | `terminal.clear` — xdotool ctrl+l to the focused terminal (safe: Context Engine guarantees the terminal is active when this surface shows). |
+| [x] | Rerun | `terminal.rerun` — xdotool Up then Return (shell history replays the last command; no per-terminal history needed). |
+| [x] | Kill | `terminal.kill` — xdotool ctrl+c to interrupt the foreground job. |
+| [ ] | Copy output | Needs scrollback access (konsole DBus / tty bridge) — deferred with Phase 9 terminal jobs. |
+| [~] | State card | Terminal card live on the Surface tab: window title (most terminals mirror the running command there) + project + branch from the Context Engine. Job name + elapsed time lands with Phase 9. |
 
 ### 3.4 Chrome surface
 
@@ -367,10 +367,10 @@ VS Code        Blender        Photoshop        Teams
 
 | Status | Item | Description |
 | ------ | ---- | ----------- |
-| [ ] | Swipe between contexts | Horizontal swipe swaps surface (`VS Code ⇄ Terminal ⇄ Docker`); respect user's pinned override. |
-| [ ] | Swipe media card | Left/right swipe on now-playing = previous/next. |
-| [ ] | Swipe to dismiss event | Swipe an attention event away (marks read, does not dismiss the underlying state). |
-| [ ] | Drag sliders | Volume/brightness/seek are drag sliders (volume already is; ensure brightness + seek match). |
+| [x] | Swipe between contexts | Horizontal swipe on the Surface tab cycles surfaces (sends `context.override`, so the choice pins exactly like the pin button; pin button still clears). Velocity threshold avoids accidental swipes while scrolling. |
+| [x] | Swipe media card | Left/right swipe on the now-playing card = `media.next` / `media.previous`. |
+| [x] | Swipe to dismiss event | Dismissible event cards — swipe marks read (dismissed-set keyed by type+timestamp); underlying state untouched. |
+| [x] | Drag sliders | Volume/brightness strip sliders use drag + onChangeEnd commit; media seek slider matches (drag updates local, onChangeEnd seeks). |
 
 ### Physical Stream Deck → Tact translation (interaction model)
 
@@ -443,7 +443,7 @@ TACT
 | [x] | Project surface | ProjectCard on the Surface tab when `context.project` is active — nested under the app surface, per the Tact Surface model. |
 | [ ] | Project presets | Save a project-specific workspace configuration. |
 
-**Status: ~70% COMPLETE** — full app-surface set live (VS Code Run/Debug/Test/Open File, Chrome nav, Teams meeting controls, Spotify), App Launcher tab (3.8), Window/Workspace controls + layout presets (3.9), Project Workspace card + resources (3.10). Remaining: Terminal jobs (3.3), build/test state, CDP state card, gestures (3.7).
+**Status: ~85% COMPLETE** — full app-surface set live (VS Code Run/Debug/Test/Open File, Chrome nav, Teams meeting controls, Spotify, Terminal New/Clear/Rerun/Kill + state card), App Launcher tab (3.8), Window/Workspace controls + layout presets (3.9), Project Workspace card + resources (3.10), contextual gestures (3.7). Remaining: terminal jobs + copy output (Phase 9), build/test state, CDP state card.
 
 ---
 
@@ -481,9 +481,9 @@ From the review mentioning switching between audio devices (headphones ↔ speak
 | Status | Item | Description |
 | ------ | ---- | ----------- |
 | [x] | Audio output device switching | `system.sinks` (pactl `list short sinks` + default) rendered as ChoiceChips in the Control Strip sheet; `system.set_sink` switches with one tap. |
-| [ ] | Microphone device switching | Same for sources (`pactl list short sources`) — Phase 9 external controls too. |
+| [x] | Microphone device switching | `system.sources` / `system.set_source` (pactl `get-default-source` / `list short sources` / `set-default-source`) — `.monitor` loopbacks filtered out so only real capture devices show; ChoiceChips in the strip sheet under the sink row. |
 
-**Status: ~70% COMPLETE** — persistent Control Strip live on every tab (volume slider, play/pause, lock, screenshot) with an expandable sheet for volume + brightness + audio-output switching. Remaining: now-playing title in the strip, pinned quick-switcher row, mic switching.
+**Status: ~85% COMPLETE** — persistent Control Strip live on every tab (volume slider, play/pause, lock, screenshot) with an expandable sheet for volume + brightness + audio output + microphone switching. Remaining: now-playing title in the strip, pinned quick-switcher row.
 
 ---
 
@@ -807,4 +807,4 @@ The reviews tempt you to add everything. These are proofs of breadth, not things
 | **B** | Developer state + events: Build / Tests / Docker / Git / CI + actionable events | Phases 5, 6 |
 | **C** | Daily utility: Clipboard + Snippets, Brightness, Dim, Open App, Lock, Wake | Phases 4, 7 |
 
-**Immediate next work:** Phase 3 is ~70% shipped — the full app-surface set (VS Code Run/Debug/Test, Chrome nav, Teams meeting controls, Spotify), **App Launcher tab**, **window/workspace layout presets**, and the **project workspace card** are all live, and the **Phase 4 Control Strip** (volume/brightness/audio-output sheet) sits on every tab. Natural next iterations: Terminal surface jobs + process monitor (3.3, feeds Phase 5 running tasks), build/test state cards (3.2, 5.1), contextual gestures (3.7), then **Phase 6 actionable events** (build failure → `[View Logs] [Re-run]`) and **Phase 8 Workflows & Macros** (compose `project.open`-style sequences from the registry — the stream-deck multi-action pattern). Codebase stays modular: one integration file per capability (`tact/agent/integrations/README.md`).
+**Immediate next work:** Phase 3 is ~85% shipped — the full app-surface set (VS Code Run/Debug/Test, Chrome nav, Teams meeting controls, Spotify, **Terminal Clear/Rerun/Kill + state card**), **App Launcher tab**, **window/workspace layout presets**, the **project workspace card**, and the **contextual gestures** (swipe surfaces / media / dismiss events) are all live, and the **Phase 4 Control Strip** (volume/brightness/audio-output/microphone sheet) sits on every tab. Natural next iterations: build/test state cards (3.2, 5.1), then **Phase 6 actionable events** (build failure → `[View Logs] [Re-run]`) and **Phase 8 Workflows & Macros** (compose `project.open`-style sequences from the registry — the stream-deck multi-action pattern). Terminal jobs + copy output wait for the Phase 9 tty bridge. Codebase stays modular: one integration file per capability (`tact/agent/integrations/README.md`).

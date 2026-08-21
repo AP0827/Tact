@@ -234,6 +234,11 @@ class ActionRegistrySystemTests(unittest.TestCase):
             "window.apply_layout",
             "project.open",
             "project.resources",
+            "terminal.clear",
+            "terminal.rerun",
+            "terminal.kill",
+            "system.sources",
+            "system.set_source",
         })
 
     def test_unknown_action_returns_error(self):

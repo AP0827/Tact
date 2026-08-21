@@ -42,6 +42,8 @@ class SystemIntegration(Integration):
             "brightness": lambda p: self.brightness(payload_str(p, "value")),
             "sinks": lambda p: self.sinks(),
             "set_sink": lambda p: self.set_sink(payload_str(p, "sink")),
+            "sources": lambda p: self.sources(),
+            "set_source": lambda p: self.set_source(payload_str(p, "source")),
         }
 
     def snapshot(self) -> dict[str, Any]:
@@ -65,6 +67,7 @@ class SystemIntegration(Integration):
         volume = self.volume().get("volume") if self.volume().get("ok") else None
         brightness = self.brightness().get("brightness") if self.brightness().get("ok") else None
         sinks = self.sinks() if self.sinks().get("ok") else None
+        sources = self.sources() if self.sources().get("ok") else None
         apps = self.apps() if self.apps().get("ok") else None
         return {
             "cpu": cpu,
@@ -73,6 +76,7 @@ class SystemIntegration(Integration):
             "volume": volume,
             "brightness": brightness,
             "sinks": sinks,
+            "sources": sources,
             "apps": apps,
             "battery": self.battery(),
         }
@@ -595,6 +599,65 @@ class SystemIntegration(Integration):
         if completed.returncode != 0:
             return {"ok": False, "error": "sink_not_found"}
         return {"ok": True, "sink": sink}
+
+    def sources(self) -> dict[str, Any]:
+        """List audio input sources (microphones), marking the default."""
+        if not shutil.which("pactl"):
+            return {"ok": False, "error": "pactl_not_found"}
+        try:
+            current = subprocess.run(
+                ["pactl", "get-default-source"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+            default = current.stdout.strip()
+            listed = subprocess.run(
+                ["pactl", "list", "short", "sources"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return {"ok": False, "error": str(exc)}
+        sources = []
+        for line in listed.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            # Skip output-monitor loopbacks — the mic switcher lists real
+            # capture devices only.
+            if parts[1].endswith(".monitor"):
+                continue
+            sources.append(
+                {
+                    "id": parts[0],
+                    "name": parts[1],
+                    "default": parts[1] == default,
+                }
+            )
+        return {"ok": True, "sources": sources, "default": default}
+
+    def set_source(self, source: Optional[str]) -> dict[str, Any]:
+        if not source:
+            return {"ok": False, "error": "source_required"}
+        if not shutil.which("pactl"):
+            return {"ok": False, "error": "pactl_not_found"}
+        try:
+            completed = subprocess.run(
+                ["pactl", "set-default-source", source],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return {"ok": False, "error": str(exc)}
+        if completed.returncode != 0:
+            return {"ok": False, "error": "source_not_found"}
+        return {"ok": True, "source": source}
 
     def _run_platform_command(
         self,

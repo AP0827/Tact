@@ -17,6 +17,7 @@ from tact.agent.integrations.teams import TeamsIntegration
 from tact.agent.integrations.window import WindowIntegration
 from tact.agent.integrations.system import SystemIntegration
 from tact.agent.integrations.project import ProjectIntegration
+from tact.agent.integrations.terminal import TerminalIntegration
 
 
 class GitIntegrationTests(unittest.TestCase):
@@ -877,6 +878,88 @@ class ProjectIntegrationTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         repo = next(r for r in result["resources"] if r["id"] == "repo")
         self.assertEqual(repo["url"], "https://github.com/user/repo")
+
+
+class TerminalIntegrationTests(unittest.TestCase):
+    @patch("tact.agent.integrations.terminal.integration.shutil.which", return_value="/usr/bin/xdotool")
+    @patch("tact.agent.integrations.terminal.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.terminal.integration.subprocess.run")
+    def test_clear_sends_ctrl_l(self, mock_run, mock_which):
+        integration = TerminalIntegration()
+        result = integration.actions()["clear"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(mock_run.call_args[0][0], ["xdotool", "key", "--clearmodifiers", "ctrl+l"])
+
+    @patch("tact.agent.integrations.terminal.integration.shutil.which", return_value="/usr/bin/xdotool")
+    @patch("tact.agent.integrations.terminal.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.terminal.integration.subprocess.run")
+    def test_rerun_sends_up_then_return(self, mock_run, mock_which):
+        integration = TerminalIntegration()
+        result = integration.actions()["rerun"]({})
+        self.assertTrue(result["ok"])
+        keys = [call[0][0][3] for call in mock_run.call_args_list]
+        self.assertEqual(keys, ["Up", "Return"])
+
+    @patch("tact.agent.integrations.terminal.integration.shutil.which", return_value="/usr/bin/xdotool")
+    @patch("tact.agent.integrations.terminal.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.terminal.integration.subprocess.run")
+    def test_kill_sends_ctrl_c(self, mock_run, mock_which):
+        integration = TerminalIntegration()
+        result = integration.actions()["kill"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(mock_run.call_args[0][0][3], "ctrl+c")
+
+    @patch("tact.agent.integrations.terminal.integration.shutil.which", return_value=None)
+    def test_unavailable_without_xdotool(self, mock_which):
+        integration = TerminalIntegration()
+        result = integration.actions()["clear"]({})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "xdotool_unavailable")
+
+
+class SystemSourceSwitcherTests(unittest.TestCase):
+    def setUp(self):
+        self.integration = SystemIntegration()
+
+    @patch("tact.agent.integrations.system.integration.shutil.which", return_value="/usr/bin/pactl")
+    @patch("tact.agent.integrations.system.integration.subprocess.run")
+    def test_sources_marks_default(self, mock_run, mock_which):
+        mock_run.side_effect = [
+            SimpleNamespace(returncode=0, stdout="usb_mic\n"),
+            SimpleNamespace(returncode=0, stdout="0\tinternal\n1\tusb_mic\n"),
+        ]
+        result = self.integration.actions()["sources"]({})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["default"], "usb_mic")
+        by_name = {s["name"]: s for s in result["sources"]}
+        self.assertTrue(by_name["usb_mic"]["default"])
+        self.assertFalse(by_name["internal"]["default"])
+
+    @patch("tact.agent.integrations.system.integration.shutil.which", return_value="/usr/bin/pactl")
+    @patch("tact.agent.integrations.system.integration.subprocess.run")
+    def test_set_source_calls_pactl(self, mock_run, mock_which):
+        mock_run.return_value = SimpleNamespace(returncode=0, stdout="")
+        result = self.integration.actions()["set_source"]({"source": "internal"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            mock_run.call_args[0][0], ["pactl", "set-default-source", "internal"]
+        )
+
+    def test_set_source_requires_source(self):
+        result = self.integration.actions()["set_source"]({})
+        self.assertFalse(result["ok"])
+
+
+class TerminalSurfaceTests(unittest.TestCase):
+    def test_terminal_surface_has_controls_and_card(self):
+        from tact.agent.integrations.context.surfaces import SURFACES
+
+        terminal = SURFACES["terminal"].to_json()
+        self.assertEqual(terminal["state_card"], "terminal")
+        ids = [a["id"] for a in terminal["actions"]]
+        self.assertIn("terminal.clear", ids)
+        self.assertIn("terminal.rerun", ids)
+        self.assertIn("terminal.kill", ids)
 
 
 class ContextRecentAppsTests(unittest.TestCase):

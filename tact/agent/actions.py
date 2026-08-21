@@ -16,6 +16,7 @@ from .integrations.chrome import ChromeIntegration
 from .integrations.teams import TeamsIntegration
 from .integrations.window import WindowIntegration
 from .integrations.project import ProjectIntegration
+from .integrations.terminal import TerminalIntegration
 
 
 class OpenUrlPayload(BaseModel):
@@ -43,6 +44,7 @@ class ActionRegistry:
         self.teams = TeamsIntegration()
         self.window = WindowIntegration()
         self.project = ProjectIntegration()
+        self.terminal = TerminalIntegration()
         # Share the docker instance so the Context Engine's signal
         # aggregation (Phase 2) sees the same container state the monitor does.
         self.context._docker = self.docker
@@ -59,6 +61,7 @@ class ActionRegistry:
             self.teams,
             self.window,
             self.project,
+            self.terminal,
         ]
         self.event_bus = EventBus()
         self._current_workspace_path = current_workspace_path

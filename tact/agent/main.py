@@ -240,7 +240,8 @@ def _is_state_changing_action(action_id: str) -> bool:
     return action_id.startswith(
         ("git.", "media.", "system.set_workspace", "vscode.open_workspace",
          "docker.", "clipboard.", "context.", "chrome.", "teams.",
-         "window.", "project.", "system.brightness", "system.set_sink",
+         "window.", "project.", "terminal.", "system.brightness", "system.set_sink",
+         "system.set_source",
          "system.open_app", "system.focus_app", "system.lock_screen",
          "system.screenshot", "system.volume", "system.mute")
     )

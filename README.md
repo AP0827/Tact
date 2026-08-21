@@ -11,7 +11,7 @@ There are three moving parts:
 ## What this contains
 
 - FastAPI desktop agent with WebSocket server and HTTP pairing API
-- **Allowlisted action registry** — ~90 actions across 11 integrations (`system`, `vscode`, `git`, `media`, `docker`, `clipboard`, `context`, `chrome`, `teams`, `window`, `project`); every action runs through the registry, nothing is ad-hoc
+- **Allowlisted action registry** — ~85 actions across 12 integrations (`system`, `vscode`, `git`, `media`, `docker`, `clipboard`, `context`, `chrome`, `teams`, `window`, `project`, `terminal`); every action runs through the registry, nothing is ad-hoc
 - **Context Engine** — detects the focused application, resolves the active project + git branch, classifies the workflow via signal aggregation (git/docker), tracks recent apps, and pushes `context.changed` events so the phone surface can react
 - **Context surfaces** — the phone's first tab renders the active surface (VS Code Run/Debug/Test, Chrome nav, Teams meeting controls, Spotify transport, Desktop fallback) with a live state card, project card, and workspace glance row
 - **App Launcher tab** — known apps grouped into Development/Communication/Media with running indicators, one-tap launch or focus, recent-apps row
@@ -235,6 +235,7 @@ All actions are allowlisted in the agent and dispatched by `ActionRegistry`:
 - `system.lock_screen`, `system.screenshot`, `system.battery`
 - `system.apps` (registry + running state), `system.open_app` (launch + focus), `system.focus_app`
 - `system.brightness` (get/set, xrandr overlay), `system.sinks` (audio outputs), `system.set_sink` (switch default sink)
+- `system.sources` (microphones, `.monitor` loopbacks filtered), `system.set_source` (switch default mic)
 
 **vscode**
 - `vscode.open_workspace`, `vscode.status`, `vscode.workspaces`
@@ -279,6 +280,9 @@ All actions are allowlisted in the agent and dispatched by `ActionRegistry`:
 - `project.open` (composite: VS Code + terminal + file manager at the path)
 - `project.resources` (per-project buttons incl. the resolved git remote URL)
 
+**terminal**
+- `terminal.clear` (ctrl+l), `terminal.rerun` (Up + Return), `terminal.kill` (ctrl+c) — xdotool keys to the focused terminal, safe because the Context Engine only shows this surface when a terminal is active
+
 The current registry is also published in every state snapshot
 under `actions`, so clients can render dynamic action grids.
 
@@ -288,13 +292,19 @@ The phone's first tab renders the **active surface** from
 `snapshot.context.surface` — a header (app icon, title, workflow chip, pin
 toggle), the surface's own action grid (VS Code: Run Task/Debug/Test/Open
 File + git; Chrome/Edge/Firefox: back/forward/refresh/tabs/copy URL; Teams:
-mute/camera/share/leave; Spotify: transport), a live state card (git status,
-now-playing), a **project card** (one-tap `project.open` environment +
+mute/camera/share/leave; Spotify: transport; Terminal: New/Clear/Rerun/Kill
++ git), a live state card (git status, now-playing, terminal title +
+project + branch), a **project card** (one-tap `project.open` environment +
 workspace/terminal/browser/folder/repo resources), and a compact workspace
 glance row (docker, battery, branch, staleness). Unknown apps and unavailable
 detection fall back to the "Desktop" surface so the tab is never empty.
 Surfaces live in `tact/agent/integrations/context/surfaces.py` and each
 button maps to an allowlisted registry action.
+
+**Gestures:** horizontal swipe on the Surface tab cycles surfaces (pins the
+choice via `context.override`, same as the pin button), swipe the
+now-playing card for previous/next, and swipe event cards away to mark them
+read.
 
 ## App launcher & window controls
 
@@ -321,9 +331,10 @@ remote) reuse existing actions.
 A compact persistent bar sits above the navigation bar on **every tab**:
 volume slider, play/pause, screenshot, and lock. Tapping the volume icon
 expands a bottom sheet with full sliders for volume and brightness
-(`system.brightness`, xrandr overlay) plus the **audio output switcher**
+(`system.brightness`, xrandr overlay), the **audio output switcher**
 (`system.sinks` / `system.set_sink` — switch between speakers, HDMI,
-Bluetooth with one tap).
+Bluetooth with one tap), and the **microphone switcher** (`system.sources` /
+`system.set_source`).
 
 ## Media controls
 
@@ -423,7 +434,7 @@ client/
 └── index.html               # single-file web client fallback
 tests/                       # agent tests
 ├── test_domain.py
-└── test_integrations.py     # 75 tests, pytest
+└── test_integrations.py     # 83 tests, pytest
 docs/
 └── PHASE_TRACKER.md         # roadmap + status per phase
 ```
@@ -441,9 +452,10 @@ cd app && flutter test             # Flutter widget smoke test
 The full roadmap lives in `docs/PHASE_TRACKER.md` (phases 0–14, per-item
 status, priorities). In brief: the Context Engine (phase 2) and the full
 Phase 3 surface set (VS Code Run/Debug/Test, Chrome nav, Teams meeting
-controls, app launcher, window/workspace layout presets, project workspace)
-are live, along with the Phase 4 persistent Control Strip (volume, brightness,
-audio-output switching). Next are the Terminal surface jobs, build/test state
-cards, contextual gestures, then actionable events (phase 6) and workflows &
+controls, Terminal Clear/Rerun/Kill, app launcher, window/workspace layout
+presets, project workspace) are live, along with the Phase 4 persistent
+Control Strip (volume, brightness, audio output + microphone switching) and
+the contextual gestures (swipe surfaces / media / dismiss events). Next are
+build/test state cards, then actionable events (phase 6) and workflows &
 macros (phase 8). Every phase builds on the same integration pattern: one
 folder + one registry line per capability.

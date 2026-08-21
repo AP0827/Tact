@@ -26,7 +26,9 @@ class _MediaTabState extends ConsumerState<MediaTab> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _control(String action) async {
@@ -50,9 +52,9 @@ class _MediaTabState extends ConsumerState<MediaTab> {
       _volumeDragging = false;
     });
     try {
-      await ref
-          .read(tactClientProvider)
-          .sendAction('system.volume', {'value': value.round()});
+      await ref.read(tactClientProvider).sendAction('system.volume', {
+        'value': value.round(),
+      });
     } catch (e) {
       _snack('$e');
     }
@@ -72,7 +74,9 @@ class _MediaTabState extends ConsumerState<MediaTab> {
 
   Future<void> _openUrl(String url) async {
     try {
-      await ref.read(tactClientProvider).sendAction('system.open_url', {'url': url});
+      await ref.read(tactClientProvider).sendAction('system.open_url', {
+        'url': url,
+      });
     } catch (e) {
       _snack('$e');
     }
@@ -107,12 +111,15 @@ class _MediaTabState extends ConsumerState<MediaTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Media controls unavailable',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Media controls unavailable',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   const Text(
-                      'The agent needs playerctl (MPRIS) to control Spotify, '
-                      'browser media, and other players.'),
+                    'The agent needs playerctl (MPRIS) to control Spotify, '
+                    'browser media, and other players.',
+                  ),
                   const SizedBox(height: 4),
                   const Text('Install with: sudo apt install playerctl'),
                   const SizedBox(height: 16),
@@ -135,11 +142,13 @@ class _MediaTabState extends ConsumerState<MediaTab> {
     final active = (media['active'] as Map?)?.cast<String, dynamic>();
     final activePlayer = active?['player'] as String?;
 
-    _selectedPlayer ??= players.contains('spotify')
-        ? 'spotify'
-        : (activePlayer ?? (players.isNotEmpty ? players.first : null));
+    _selectedPlayer ??=
+        players.contains('spotify')
+            ? 'spotify'
+            : (activePlayer ?? (players.isNotEmpty ? players.first : null));
 
-    final shown = (details[_selectedPlayer] as Map?)?.cast<String, dynamic>() ??
+    final shown =
+        (details[_selectedPlayer] as Map?)?.cast<String, dynamic>() ??
         active ??
         <String, dynamic>{};
     final title = shown['title'] as String?;
@@ -155,79 +164,108 @@ class _MediaTabState extends ConsumerState<MediaTab> {
 
     // Live volume: follow telemetry unless the user is dragging the slider
     // (so laptop-side changes reflect on the phone).
-    final currentVolume = (_volumeDragging ? (_systemVolume ?? 0) : (sysVolume ?? _systemVolume ?? 0))
-        .clamp(0, 100)
-        .toDouble();
+    final currentVolume =
+        (_volumeDragging
+                ? (_systemVolume ?? 0)
+                : (sysVolume ?? _systemVolume ?? 0))
+            .clamp(0, 100)
+            .toDouble();
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.music_note,
-                        size: 20, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: MarqueeText(
-                        text: title ?? 'Nothing playing',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontSize: 17,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                MarqueeText(
-                  text: artist ?? '—',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.muted,
-                  ),
-                  duration: const Duration(milliseconds: 4000),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.circle,
-                        size: 12, color: isPlaying ? Colors.green : Colors.grey),
-                    const SizedBox(width: 6),
-                    Text(status,
-                        style: Theme.of(context).textTheme.bodySmall),
-                    const Spacer(),
-                    if (_selectedPlayer != null)
-                      Text(_selectedPlayer!,
-                          style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-                if (length != null && length > 0) ...[
-                  const SizedBox(height: 16),
+        // Phase 3.7: swipe the now-playing card for previous / next.
+        GestureDetector(
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity < -350) {
+              _control('media.next');
+            } else if (velocity > 350) {
+              _control('media.previous');
+            }
+          },
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
                     children: [
-                      Text(_formatTime(_position ?? position ?? 0),
-                          style: Theme.of(context).textTheme.bodySmall),
+                      Icon(
+                        Icons.music_note,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Slider(
-                          value: (_position ?? position ?? 0)
-                              .clamp(0, length)
-                              .toDouble(),
-                          max: length,
-                          activeColor: Theme.of(context).colorScheme.primary,
-                          onChanged: (v) => setState(() => _position = v),
-                          onChangeEnd: _seek,
+                        child: MarqueeText(
+                          text: title ?? 'Nothing playing',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleMedium?.copyWith(fontSize: 17),
                         ),
                       ),
-                      Text(_formatTime(length),
-                          style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
+                  const SizedBox(height: 4),
+                  MarqueeText(
+                    text: artist ?? '—',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: AppTheme.muted),
+                    duration: const Duration(milliseconds: 4000),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.circle,
+                        size: 12,
+                        color: isPlaying ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        status,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const Spacer(),
+                      if (_selectedPlayer != null)
+                        Text(
+                          _selectedPlayer!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                  if (length != null && length > 0) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Text(
+                          _formatTime(_position ?? position ?? 0),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value:
+                                (_position ?? position ?? 0)
+                                    .clamp(0, length)
+                                    .toDouble(),
+                            max: length,
+                            activeColor: Theme.of(context).colorScheme.primary,
+                            onChanged: (v) => setState(() => _position = v),
+                            onChangeEnd: _seek,
+                          ),
+                        ),
+                        Text(
+                          _formatTime(length),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -238,8 +276,10 @@ class _MediaTabState extends ConsumerState<MediaTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Transport',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Transport',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
                 if (players.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
@@ -250,9 +290,12 @@ class _MediaTabState extends ConsumerState<MediaTab> {
                       isDense: true,
                       border: OutlineInputBorder(),
                     ),
-                    items: players
-                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                        .toList(),
+                    items:
+                        players
+                            .map(
+                              (p) => DropdownMenuItem(value: p, child: Text(p)),
+                            )
+                            .toList(),
                     onChanged: (v) {
                       setState(() {
                         _selectedPlayer = v;
@@ -291,28 +334,37 @@ class _MediaTabState extends ConsumerState<MediaTab> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Icon(Icons.volume_down,
-                        size: 18, color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.volume_down,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     Expanded(
                       child: Slider(
                         value: currentVolume,
                         max: 100,
                         activeColor: Theme.of(context).colorScheme.primary,
-                        onChanged: (v) => setState(() {
-                          _systemVolume = v;
-                          _volumeDragging = true;
-                        }),
+                        onChanged:
+                            (v) => setState(() {
+                              _systemVolume = v;
+                              _volumeDragging = true;
+                            }),
                         onChangeEnd: _setVolume,
                       ),
                     ),
-                    Icon(Icons.volume_up,
-                        size: 18, color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.volume_up,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 8),
                     SizedBox(
                       width: 40,
-                      child: Text('${currentVolume.round()}%',
-                          textAlign: TextAlign.end,
-                          style: Theme.of(context).textTheme.bodySmall),
+                      child: Text(
+                        '${currentVolume.round()}%',
+                        textAlign: TextAlign.end,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
                   ],
                 ),
@@ -327,8 +379,10 @@ class _MediaTabState extends ConsumerState<MediaTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Quick open',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Quick open',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -346,8 +400,7 @@ class _MediaTabState extends ConsumerState<MediaTab> {
                         actionId: 'system.open_url',
                         label: 'YouTube',
                         icon: Icons.play_circle_fill,
-                        onPressed: () =>
-                            _openUrl('https://www.youtube.com'),
+                        onPressed: () => _openUrl('https://www.youtube.com'),
                       ),
                     ),
                   ],
@@ -403,16 +456,17 @@ class _TransportButton extends StatelessWidget {
               shape: BoxShape.circle,
               color: primary ? color.primary : AppTheme.surfaceHigh,
             ),
-            child: busy
-                ? const Padding(
-                    padding: EdgeInsets.all(14),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    icon,
-                    size: primary ? 32 : 26,
-                    color: primary ? color.onPrimary : color.primary,
-                  ),
+            child:
+                busy
+                    ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : Icon(
+                      icon,
+                      size: primary ? 32 : 26,
+                      color: primary ? color.onPrimary : color.primary,
+                    ),
           ),
         ),
         const SizedBox(height: 6),
