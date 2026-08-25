@@ -48,15 +48,20 @@ For Android, set Gradle properties `tactAccountServiceUrl` and
 reads the corresponding environment values. Apple web authentication requires
 `/api/auth/apple/callback` to be registered with the Apple service identifier.
 
-## Desktop lifecycle
+## Device roles and desktop lifecycle
 
-- macOS starts in the menu bar. Dashboard and native Settings scenes open
-  independently.
-- Windows starts in the notification area. Left-click opens the dashboard; the
-  context menu opens the dashboard, a separate preferences window, or quits.
-  Closing the dashboard hides it without terminating the background app.
-- Linux publishes a freedesktop StatusNotifierItem. Its menu opens the
-  dashboard or a separate preferences window. Closing either window hides it.
+Phones and tablets are controllers. Computers are hosts: desktop applications
+do not render or execute the phone control surface.
+
+- macOS starts in the menu bar with a Liquid Glass host panel. It displays the
+  host IP and OTP, handles pairing approvals, and administers connections.
+- Windows starts in the notification area. Left-click opens host status and
+  connection administration; the context menu opens separate preferences.
+- Linux publishes a freedesktop StatusNotifierItem. Its panel provides the same
+  OTP, approval, and authorization controls.
+
+The agent exposes `/api/host/status` for local host UI state. Revoking a device
+also closes its active WebSocket rather than merely removing future access.
 
 GNOME requires an AppIndicator/StatusNotifier shell extension, as is customary
 for StatusNotifier applications.

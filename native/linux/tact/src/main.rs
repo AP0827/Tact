@@ -108,8 +108,65 @@ struct MediaWidgets {
 
 fn main() {
     let app = Application::builder().application_id("com.tact.Tact").build();
-    app.connect_activate(build);
+    app.connect_activate(build_host);
     app.run();
+}
+
+#[derive(Clone)]
+struct HostClient { http: reqwest::blocking::Client, base: String }
+
+impl HostClient {
+    fn new() -> Self { Self { http: reqwest::blocking::Client::builder().timeout(Duration::from_secs(3)).build().unwrap(), base: "http://127.0.0.1:8000".into() } }
+    fn status(&self) -> Result<Value, String> { self.http.get(format!("{}/api/host/status", self.base)).send().and_then(|response| response.error_for_status()).and_then(|response| response.json()).map_err(|error| error.to_string()) }
+    fn post(&self, path: &str, body: Value) { let _ = self.http.post(format!("{}{}", self.base, path)).json(&body).send(); }
+}
+
+fn build_host(app: &Application) {
+    install_style();
+    app.hold();
+    let client = HostClient::new();
+    let host = Label::new(Some("127.0.0.1:8000")); host.add_css_class("monospace"); host.set_halign(Align::Start);
+    let otp = Label::new(Some("—")); otp.add_css_class("title-1"); otp.add_css_class("monospace"); otp.set_halign(Align::Start);
+    let status = Label::new(Some("Connecting to the local agent…")); status.add_css_class("dim-label"); status.set_halign(Align::Start);
+    let approvals = ListBox::new(); approvals.add_css_class("boxed-list");
+    let devices = ListBox::new(); devices.add_css_class("boxed-list");
+    let page = page_box();
+    let title = Label::new(Some("Tact Host")); title.add_css_class("title-1"); title.set_halign(Align::Start); page.append(&title); page.append(&status);
+    let host_card = GtkBox::new(Orientation::Vertical, 10); host_card.add_css_class("card");
+    let host_caption = Label::new(Some("THIS HOST")); host_caption.add_css_class("dim-label"); host_caption.set_halign(Align::Start); host_card.append(&host_caption); host_card.append(&host);
+    let otp_caption = Label::new(Some("PAIRING CODE")); otp_caption.add_css_class("dim-label"); otp_caption.set_halign(Align::Start); host_card.append(&otp_caption); host_card.append(&otp);
+    let controls = GtkBox::new(Orientation::Horizontal, 8);
+    let regenerate = Button::with_label("Regenerate OTP"); let refresh = Button::with_label("Refresh"); controls.append(&regenerate); controls.append(&refresh); host_card.append(&controls); page.append(&host_card);
+    let approvals_title = Label::new(Some("Pending approvals")); approvals_title.add_css_class("title-3"); approvals_title.set_halign(Align::Start); page.append(&approvals_title); page.append(&approvals);
+    let devices_title = Label::new(Some("Authorized controllers")); devices_title.add_css_class("title-3"); devices_title.set_halign(Align::Start); page.append(&devices_title); page.append(&devices);
+    let terminate_all = Button::with_label("Terminate all connections"); terminate_all.add_css_class("destructive-action"); page.append(&terminate_all);
+    let window = ApplicationWindow::builder().application(app).title("Tact Host").default_width(680).default_height(720).content(&scroll_page(&page)).build();
+    window.connect_close_request(|window| { window.set_visible(false); glib::Propagation::Stop });
+    let refresh_view: Rc<dyn Fn()> = Rc::new({ let client=client.clone(); let host=host.clone(); let otp=otp.clone(); let status=status.clone(); let approvals=approvals.clone(); let devices=devices.clone(); move || { render_host(&client, &host, &otp, &status, &approvals, &devices); }});
+    refresh.connect_clicked({ let refresh_view=refresh_view.clone(); move |_| refresh_view() });
+    regenerate.connect_clicked({ let client=client.clone(); let refresh_view=refresh_view.clone(); move |_| { client.post("/api/debug/regenerate-otp", json!({})); refresh_view(); }});
+    terminate_all.connect_clicked({ let client=client.clone(); let refresh_view=refresh_view.clone(); move |_| { client.post("/api/pair/reset_all", json!({})); refresh_view(); }});
+    refresh_view();
+    let (desktop_tx, desktop_rx) = mpsc::channel();
+    let tray_handle = TactTray { commands: desktop_tx }.spawn().ok();
+    let window_for_tray = window.clone(); let app_for_tray = app.clone();
+    glib::timeout_add_local(Duration::from_millis(100), move || { let _keep=&tray_handle; while let Ok(command)=desktop_rx.try_recv() { match command { DesktopCommand::ShowDashboard | DesktopCommand::ShowPreferences => window_for_tray.present(), DesktopCommand::Quit => { app_for_tray.quit(); return ControlFlow::Break; } } } ControlFlow::Continue });
+}
+
+fn render_host(client: &HostClient, host: &Label, otp: &Label, status: &Label, approvals: &ListBox, devices: &ListBox) {
+    while let Some(child)=approvals.first_child() { approvals.remove(&child); }
+    while let Some(child)=devices.first_child() { devices.remove(&child); }
+    match client.status() {
+        Ok(data) => {
+            host.set_text(&format!("{}:{}", data["host"].as_str().unwrap_or("127.0.0.1"), data["port"].as_i64().unwrap_or(8000)));
+            otp.set_text(data["pairing_token"].as_str().unwrap_or("—"));
+            let pending = data["pending_pairings"].as_array().cloned().unwrap_or_default(); let paired = data["paired_devices"].as_array().cloned().unwrap_or_default();
+            status.set_text(&format!("{} connected · {} waiting", paired.iter().filter(|item| item["active"].as_bool().unwrap_or(false)).count(), pending.len()));
+            for item in pending { let row=GtkBox::new(Orientation::Horizontal,8); let label=Label::new(item["label"].as_str()); label.set_hexpand(true); label.set_halign(Align::Start); row.append(&label); let allow=Button::with_label("Allow"); let reject=Button::with_label("Reject"); let id=item["pending_id"].as_str().unwrap_or("").to_string(); allow.connect_clicked({let client=client.clone();let id=id.clone();move |_|client.post("/api/pair/approve",json!({"pending_id":id}))}); reject.connect_clicked({let client=client.clone();move |_|client.post("/api/pair/reject",json!({"pending_id":id}))}); row.append(&allow);row.append(&reject);approvals.append(&row); }
+            for item in paired { let row=GtkBox::new(Orientation::Horizontal,8); let label=Label::new(Some(&format!("{}{}",if item["active"].as_bool().unwrap_or(false){"● "}else{"○ "},item["label"].as_str().unwrap_or("Controller"))));label.set_hexpand(true);label.set_halign(Align::Start);row.append(&label);let terminate=Button::with_label("Terminate");let id=item["device_id"].as_str().unwrap_or("").to_string();terminate.connect_clicked({let client=client.clone();move |_|client.post("/api/pair/reset",json!({"device_id":id}))});row.append(&terminate);devices.append(&row); }
+        }
+        Err(error) => status.set_text(&format!("Start the Tact agent · {}", error)),
+    }
 }
 
 fn build(app: &Application) {

@@ -27,8 +27,9 @@ a shared UI runtime.
   and macOS 14+.
 - Material 3 components, dynamic color, edge-to-edge layout, system light/dark
   themes, and adaptive navigation on Android.
-- Menu-bar macOS app and notification-area Windows/Linux apps. Dashboard and
-  preferences open as separate windows; closing them leaves the tray app alive.
+- Host-only menu-bar macOS app and notification-area Windows/Linux apps. Their
+  panels show the host address and OTP, approve or reject controllers, and
+  terminate active authorizations. Computers never expose controller actions.
 - Email/password, Sign in with Apple, Google Sign-In, and direct IP + one-time
   code authentication.
 - Account-scoped trusted-device registry with platform icons, active state,
@@ -69,8 +70,9 @@ docs/                         # architecture and roadmap documentation
 ```
 
 The agent sends an initial snapshot after authentication, refreshes telemetry,
-and publishes state-change events. Clients send action identifiers and payloads;
-the agent executes only actions registered in `ActionRegistry`.
+and publishes state-change events. Phone and tablet controllers build their
+complete control catalog from the actions advertised in that snapshot. The
+agent executes only actions registered in `ActionRegistry`.
 
 ## Quick start
 
@@ -139,7 +141,9 @@ xcodebuild -project native/apple/Tact/Tact.xcodeproj \
 swift run --package-path native/apple/TactApple
 ```
 
-Tact starts in the menu bar. Use its menu to open the dashboard or Settings.
+Tact starts in the menu bar as a host utility. Its Liquid Glass panel shows the
+host IP, current OTP, pending approvals, and connection status. Settings exposes
+OTP regeneration and per-controller or global termination.
 
 #### Android
 
