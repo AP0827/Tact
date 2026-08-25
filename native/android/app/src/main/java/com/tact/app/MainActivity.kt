@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.DeveloperBoard
 import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.LaptopMac
 import androidx.compose.material.icons.rounded.Lock
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.TabletMac
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -403,6 +405,7 @@ private data class Destination(val screen: TactScreen, val label: String, val ic
 private val destinations = listOf(
     Destination(TactScreen.SYSTEM, "System", Icons.Rounded.Computer),
     Destination(TactScreen.DEVELOPER, "Developer", Icons.Rounded.Code),
+    Destination(TactScreen.CONTROLS, "Controls", Icons.Rounded.Tune),
     Destination(TactScreen.MEDIA, "Media", Icons.Rounded.MusicNote),
     Destination(TactScreen.EVENTS, "Events", Icons.Rounded.Notifications),
     Destination(TactScreen.DECK, "Deck", Icons.Rounded.Dashboard),
@@ -465,6 +468,7 @@ private fun Dashboard(state: TactUiState, model: TactViewModel) {
                     when (state.screen) {
                         TactScreen.SYSTEM -> SystemScreen(state, model::action)
                         TactScreen.DEVELOPER -> DeveloperScreen(state.snapshot, model::action)
+                        TactScreen.CONTROLS -> ActionCatalogScreen(state.snapshot, model::action)
                         TactScreen.MEDIA -> MediaScreen(state.snapshot, model::action)
                         TactScreen.EVENTS -> EventsScreen(state.events)
                         TactScreen.DECK -> DeckScreen(model::action)

@@ -29,6 +29,7 @@ final class TactAppModel: ObservableObject {
     @Published var isBusy = false
     @Published var demoMode = false
     @Published var authMode = 0
+    @Published var lastActionResult: String?
 
     @AppStorage("tact.appearance")
     var appearance = "system"
@@ -303,10 +304,13 @@ final class TactAppModel: ObservableObject {
 
         Task {
             do {
-                _ = try await client.sendAction(
+                let result = try await client.sendAction(
                     id,
                     payload: sendablePayload
                 )
+                await MainActor.run {
+                    self.lastActionResult = "\(id): \(String(describing: result.value))"
+                }
             } catch {
                 await MainActor.run {
                     self.error = error.localizedDescription
@@ -381,5 +385,12 @@ final class TactAppModel: ObservableObject {
         }
 
         return current as? String
+    }
+
+    var availableActions: [String] {
+        let value = snapshot.values["actions"]?.value
+        if let actions = value as? [String] { return actions }
+        if let actions = value as? [Any] { return actions.compactMap { $0 as? String } }
+        return []
     }
 }

@@ -39,6 +39,9 @@ struct MainShellView: View {
         case .developer:
             DeveloperView()
 
+        case .controls:
+            ControllerActionsView()
+
         case .media:
             MediaView()
 
@@ -142,6 +145,7 @@ struct BottomNavigation: View {
     private let screens: [TactScreen] = [
         .general,
         .developer,
+        .controls,
         .media,
         .events,
         .deck
@@ -278,6 +282,9 @@ extension TactScreen {
         case .developer:
             return "Developer"
 
+        case .controls:
+            return "Controls"
+
         case .media:
             return "Media"
 
@@ -296,6 +303,9 @@ extension TactScreen {
 
         case .developer:
             return "chevron.left.forwardslash.chevron.right"
+
+        case .controls:
+            return "slider.horizontal.3"
 
         case .media:
             return "play.circle"

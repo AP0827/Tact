@@ -43,7 +43,7 @@ public struct TactDevice: Identifiable, Sendable, Equatable {
 }
 
 public enum TactScreen: String, CaseIterable, Sendable {
-    case general, developer, media, events, deck
+    case general, developer, controls, media, events, deck
 }
 
 public struct TactSnapshot: Sendable {

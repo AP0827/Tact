@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 
 enum class AppPhase { AUTH, DEVICES, DASHBOARD }
-enum class TactScreen { SYSTEM, DEVELOPER, MEDIA, EVENTS, DECK, SETTINGS }
+enum class TactScreen { SYSTEM, DEVELOPER, CONTROLS, MEDIA, EVENTS, DECK, SETTINGS }
 
 data class TactUiState(
     val phase: AppPhase = AppPhase.AUTH,
