@@ -39,16 +39,19 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.DeveloperBoard
+import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.LaptopMac
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.TabletMac
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -75,6 +78,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -140,10 +145,11 @@ fun TactApp(model: TactViewModel = viewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val dark = isSystemInDarkTheme()
-    val colors = if (android.os.Build.VERSION.SDK_INT >= 31 && dark) {
-        dynamicDarkColorScheme(context)
-    } else {
-        darkColorScheme(primary = Cyan, secondary = Cyan, background = Ink, surface = Panel)
+    val colors = when {
+        android.os.Build.VERSION.SDK_INT >= 31 && dark -> dynamicDarkColorScheme(context)
+        android.os.Build.VERSION.SDK_INT >= 31 -> dynamicLightColorScheme(context)
+        dark -> darkColorScheme(primary = Cyan, secondary = Cyan, background = Ink, surface = Panel)
+        else -> lightColorScheme(primary = Color(0xFF006874), secondary = Color(0xFF4A6267))
     }
     MaterialTheme(colorScheme = colors) {
         Surface(Modifier.fillMaxSize()) {
@@ -383,9 +389,12 @@ private fun DeviceSelectionScreen(state: TactUiState, model: TactViewModel) {
 }
 
 private fun deviceIcon(platform: String): ImageVector = when (platform.lowercase()) {
-    "android" -> Icons.Rounded.DeveloperBoard
-    "ios" -> Icons.Rounded.DeveloperBoard
-    "ipados" -> Icons.Rounded.Dashboard
+    "android" -> Icons.Rounded.PhoneAndroid
+    "ios" -> Icons.Rounded.PhoneAndroid
+    "ipados" -> Icons.Rounded.TabletMac
+    "macos" -> Icons.Rounded.LaptopMac
+    "windows" -> Icons.Rounded.DesktopWindows
+    "linux" -> Icons.Rounded.Terminal
     else -> Icons.Rounded.Computer
 }
 
