@@ -1,6 +1,9 @@
 import asyncio
 import logging
+import secrets
 import shutil
+import time
+import urllib.parse
 from pathlib import Path
 from typing import Any, Optional
 
@@ -14,7 +17,7 @@ from .actions import ActionRegistry
 from .monitoring import StateMonitor
 from .events import Event
 from .config import Config
-from .accounts import AccountStore, AuthSession, ProviderTokenVerifier
+from .accounts import AccountStore, AuthSession, ProviderTokenVerifier, AppleWebAuth
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
@@ -34,6 +37,9 @@ monitor = StateMonitor(actions.event_bus, actions.integrations)
 config = Config()
 accounts = AccountStore()
 provider_tokens = ProviderTokenVerifier()
+apple_web_auth = AppleWebAuth(provider_tokens)
+_oauth_states: dict[str, tuple[str, float]] = {}
+_oauth_exchanges: dict[str, tuple[AuthSession, float]] = {}
 
 _otp = config.generate_pairing_token()
 _logger = logging.getLogger("tact.startup")
@@ -287,6 +293,60 @@ async def account_provider_login(payload: dict):
         _logger.warning("Provider token verification failed for %s: %s", provider, error)
         raise HTTPException(status_code=401, detail="invalid_provider_token") from error
     return _session_response(session)
+
+
+@app.get("/api/auth/apple/start")
+async def account_apple_start(redirect_uri: str):
+    parsed = urllib.parse.urlparse(redirect_uri)
+    if parsed.scheme != "tact" or parsed.netloc != "auth":
+        raise HTTPException(status_code=400, detail="invalid_app_redirect")
+    state = secrets.token_urlsafe(24)
+    _oauth_states[state] = (redirect_uri, time.time() + 300)
+    try:
+        return RedirectResponse(apple_web_auth.authorization_url(state))
+    except ValueError as error:
+        _oauth_states.pop(state, None)
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@app.post("/api/auth/apple/callback")
+async def account_apple_callback(
+    code: str = Form(default=""),
+    state: str = Form(default=""),
+    error: str = Form(default=""),
+):
+    pending = _oauth_states.pop(state, None)
+    if pending is None or pending[1] < time.time():
+        raise HTTPException(status_code=400, detail="invalid_or_expired_oauth_state")
+    redirect_uri = pending[0]
+    if error:
+        separator = "&" if "?" in redirect_uri else "?"
+        return RedirectResponse(
+            f"{redirect_uri}{separator}{urllib.parse.urlencode({'error': error})}",
+            status_code=303,
+        )
+    try:
+        claims = await asyncio.to_thread(apple_web_auth.exchange, code)
+        session = accounts.authenticate_provider("apple", claims)
+    except Exception as exchange_error:
+        _logger.warning("Apple web authorization failed: %s", exchange_error)
+        raise HTTPException(status_code=401, detail="apple_authorization_failed") from exchange_error
+    exchange_code = secrets.token_urlsafe(24)
+    _oauth_exchanges[exchange_code] = (session, time.time() + 60)
+    separator = "&" if "?" in redirect_uri else "?"
+    return RedirectResponse(
+        f"{redirect_uri}{separator}{urllib.parse.urlencode({'code': exchange_code})}",
+        status_code=303,
+    )
+
+
+@app.post("/api/auth/exchange")
+async def account_auth_exchange(payload: dict):
+    exchange_code = str(payload.get("code") or "")
+    pending = _oauth_exchanges.pop(exchange_code, None)
+    if pending is None or pending[1] < time.time():
+        raise HTTPException(status_code=400, detail="invalid_or_expired_exchange_code")
+    return _session_response(pending[0])
 
 
 @app.get("/api/auth/session")

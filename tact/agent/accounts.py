@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import secrets
 import sqlite3
 import threading
+import time
+import urllib.parse
+import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -438,3 +442,71 @@ class ProviderTokenVerifier:
         if provider == "google" and not claims.get("email_verified"):
             raise ValueError("provider_email_not_verified")
         return claims
+
+
+class AppleWebAuth:
+    """Apple authorization-code flow for non-Apple clients."""
+
+    def __init__(self, verifier: ProviderTokenVerifier):
+        self.verifier = verifier
+
+    def authorization_url(self, state: str) -> str:
+        client_id = self._required("TACT_APPLE_CLIENT_ID")
+        redirect_uri = self._required("TACT_APPLE_REDIRECT_URI")
+        query = urllib.parse.urlencode(
+            {
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "response_type": "code id_token",
+                "response_mode": "form_post",
+                "scope": "name email",
+                "state": state,
+            }
+        )
+        return f"https://appleid.apple.com/auth/authorize?{query}"
+
+    def exchange(self, code: str) -> dict[str, Any]:
+        client_id = self._required("TACT_APPLE_CLIENT_ID")
+        redirect_uri = self._required("TACT_APPLE_REDIRECT_URI")
+        private_key = self._required("TACT_APPLE_PRIVATE_KEY").replace("\\n", "\n")
+        now = int(time.time())
+        client_secret = jwt.encode(
+            {
+                "iss": self._required("TACT_APPLE_TEAM_ID"),
+                "iat": now,
+                "exp": now + 300,
+                "aud": "https://appleid.apple.com",
+                "sub": client_id,
+            },
+            private_key,
+            algorithm="ES256",
+            headers={"kid": self._required("TACT_APPLE_KEY_ID")},
+        )
+        body = urllib.parse.urlencode(
+            {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            "https://appleid.apple.com/auth/token",
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        identity_token = str(payload.get("id_token") or "")
+        if not identity_token:
+            raise ValueError("apple_identity_token_missing")
+        return self.verifier.verify("apple", identity_token)
+
+    @staticmethod
+    def _required(name: str) -> str:
+        value = os.environ.get(name, "").strip()
+        if not value:
+            raise ValueError(f"{name.casefold()}_not_configured")
+        return value
