@@ -8,6 +8,7 @@ struct AuthView: View {
     @State private var host = ""
     @State private var otp = ""
     @State private var mode = 0
+    @StateObject private var googleSignIn = GoogleSignInCoordinator()
 
     var body: some View {
         ZStack {
@@ -50,10 +51,31 @@ struct AuthView: View {
     private var socialButtons: some View {
         VStack(spacing: 10) {
             SignInWithAppleButton(.signIn, onRequest: { request in request.requestedScopes = [.fullName, .email] }, onCompletion: { result in
-                switch result { case .success: Task { await model.demoSocialLogin("Apple") }; case .failure(let error): model.error = error.localizedDescription }
+                switch result {
+                case .success(let authorization):
+                    guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                          let data = credential.identityToken,
+                          let token = String(data: data, encoding: .utf8) else {
+                        model.error = "Apple did not return an identity token."
+                        return
+                    }
+                    Task { await model.signIn(provider: "apple", identityToken: token) }
+                case .failure(let error): model.error = error.localizedDescription
+                }
             }).frame(height: 48).clipShape(RoundedRectangle(cornerRadius: 14))
-            Button { Task { await model.demoSocialLogin("Google") } } label: { Label("Continue with Google", systemImage: "globe").frame(maxWidth: .infinity) }.buttonStyle(.bordered).frame(height: 48)
-            Text("Google uses the native OAuth adapter; add your Google client configuration to enable production OAuth.").font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Button {
+                Task {
+                    do {
+                        let token = try await googleSignIn.signIn()
+                        await model.signIn(provider: "google", identityToken: token)
+                    } catch { model.error = error.localizedDescription }
+                }
+            } label: {
+                Label(
+                    googleSignIn.isAuthenticating ? "Authenticating…" : "Continue with Google",
+                    systemImage: "globe"
+                ).frame(maxWidth: .infinity)
+            }.buttonStyle(.bordered).frame(height: 48).disabled(googleSignIn.isAuthenticating)
         }
     }
 }

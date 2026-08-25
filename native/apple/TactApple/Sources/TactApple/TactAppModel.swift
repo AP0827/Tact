@@ -16,6 +16,8 @@ final class TactAppModel: ObservableObject {
     @Published var snapshot = TactSnapshot()
     @Published var events: [[String: AnySendable]] = []
     @Published var selectedDevice: TactDevice?
+    @Published var accountDevices: [TactAccountDevice] = []
+    @Published var account: TactAccount?
     @Published var error: String?
     @Published var isBusy = false
     @Published var demoMode = false
@@ -25,6 +27,14 @@ final class TactAppModel: ObservableObject {
     private var statusTask: Task<Void, Never>?
     let client = TactClient.shared
     let pairing = PairingService.shared
+    let accountService = AccountService.shared
+
+    var accountServiceURL: URL? {
+        let configured = ProcessInfo.processInfo.environment["TACT_ACCOUNT_SERVICE_URL"]
+            ?? UserDefaults.standard.string(forKey: "tact.account.serviceURL")
+            ?? "http://127.0.0.1:8000"
+        return URL(string: configured)
+    }
 
     init() {
         messageTask = Task {
@@ -50,26 +60,85 @@ final class TactAppModel: ObservableObject {
     }
 
     func signIn(email: String, password: String) async {
-        error = "Account sign-in requires the production identity service. Pair with your host using IP + OTP."
-    }
-
-    func demoSocialLogin(_ provider: String) async {
-        error = "\(provider) sign-in requires its production OAuth configuration. Pair with your host using IP + OTP."
-    }
-
-    func connect(device: TactDevice) async {
-        isBusy = true; error = nil; selectedDevice = device
+        isBusy = true; error = nil
+        defer { isBusy = false }
+        guard let accountServiceURL else { error = "Invalid account service address."; return }
         do {
-            let token = await pairing.savedToken()
-            if let token {
-                try await client.connect(host: device.ip, port: 8000, token: token)
-            } else {
-                // Device selection can be used before pairing; the UI routes to OTP when needed.
-                phase = .devices
-                error = "This device is not paired yet. Use IP + OTP to pair it."
-                isBusy = false
-                return
-            }
+            let session = try await accountService.signIn(
+                serviceURL: accountServiceURL,
+                email: email,
+                password: password
+            )
+            account = session.account
+            try await registerMac()
+            try await refreshDevices()
+            phase = .devices
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func signIn(provider: String, identityToken: String) async {
+        isBusy = true; error = nil
+        defer { isBusy = false }
+        guard let accountServiceURL else { error = "Invalid account service address."; return }
+        do {
+            let session = try await accountService.signIn(
+                serviceURL: accountServiceURL,
+                provider: provider,
+                identityToken: identityToken
+            )
+            account = session.account
+            try await registerMac()
+            try await refreshDevices()
+            phase = .devices
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func refreshDevices() async throws {
+        guard let accountServiceURL else { throw AccountServiceError.invalidServiceURL }
+        accountDevices = try await accountService.devices(serviceURL: accountServiceURL)
+    }
+
+    private func registerMac() async throws {
+        guard let accountServiceURL else { throw AccountServiceError.invalidServiceURL }
+        try await accountService.registerDevice(
+            serviceURL: accountServiceURL,
+            deviceID: await pairing.deviceID(),
+            label: deviceName,
+            platform: "macos",
+            deviceType: "desktop",
+            model: "Mac",
+            host: localAddress,
+            port: 8000
+        )
+    }
+
+    private var localAddress: String? {
+        Host.current().addresses.first {
+            $0.contains(".") && !$0.hasPrefix("127.")
+        }
+    }
+
+    func connect(device: TactAccountDevice) async {
+        isBusy = true; error = nil
+        selectedDevice = TactDevice(
+            id: device.deviceID,
+            name: device.label,
+            platform: device.platform,
+            model: device.model,
+            os: device.platform,
+            ip: device.host ?? "",
+            connected: device.active
+        )
+        do {
+            guard let accountServiceURL else { throw AccountServiceError.invalidServiceURL }
+            let connection = try await accountService.connection(
+                serviceURL: accountServiceURL,
+                targetDeviceID: device.deviceID,
+                clientDeviceID: await pairing.deviceID(),
+                clientLabel: deviceName
+            )
+            await pairing.saveTrustedToken(connection.token)
+            try await client.connect(host: connection.host, port: connection.port, token: connection.token)
             phase = .connected
         } catch { self.error = error.localizedDescription }
         isBusy = false
@@ -88,6 +157,16 @@ final class TactAppModel: ObservableObject {
     }
 
     func disconnect() async { await client.disconnect(); phase = .devices; connection = .disconnected }
+
+    func signOut() async {
+        await client.disconnect()
+        await accountService.signOut(serviceURL: accountServiceURL)
+        account = nil
+        accountDevices = []
+        selectedDevice = nil
+        phase = .login
+        connection = .disconnected
+    }
 
     func action(_ id: String, payload: [String: Any] = [:]) {
         if demoMode { return }

@@ -144,19 +144,23 @@ public actor AccountService {
         label: String,
         platform: String,
         deviceType: String,
-        model: String
+        model: String,
+        host: String? = nil,
+        port: Int? = nil
     ) async throws {
         let _: DeviceResponse = try await authenticatedRequest(
             serviceURL: serviceURL,
             path: "/api/account/devices",
             method: "POST",
-            body: [
-                "device_id": deviceID,
-                "label": label,
-                "platform": platform,
-                "device_type": deviceType,
-                "model": model,
-            ]
+            body: RegisterDeviceRequest(
+                deviceID: deviceID,
+                label: label,
+                platform: platform,
+                deviceType: deviceType,
+                model: model,
+                host: host,
+                port: port
+            )
         )
     }
 
@@ -248,5 +252,21 @@ public actor AccountService {
 private struct DeviceListResponse: Codable { let devices: [TactAccountDevice] }
 private struct DeviceResponse: Codable { let device: TactAccountDevice }
 private struct ConnectionResponse: Codable { let connection: TactAccountConnection }
+private struct RegisterDeviceRequest: Codable {
+    let deviceID: String
+    let label: String
+    let platform: String
+    let deviceType: String
+    let model: String
+    let host: String?
+    let port: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case deviceID = "device_id"
+        case label, platform
+        case deviceType = "device_type"
+        case model, host, port
+    }
+}
 private struct ErrorResponse: Codable { let detail: String }
 private struct EmptyResponse: Codable { init() {} }

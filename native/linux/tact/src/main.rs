@@ -1,12 +1,15 @@
 use adw::prelude::*;
 use adw::{Application, ApplicationWindow, HeaderBar, Toast, ToastOverlay, ToolbarView, WindowTitle};
 use futures_util::{SinkExt, StreamExt};
+use ksni::blocking::TrayMethods;
 use gtk::glib::{self, ControlFlow};
 use gtk::{
     Align, Box as GtkBox, Button, CssProvider, Entry, Grid, Label, ListBox, Orientation,
     PasswordEntry, ProgressBar, ScrolledWindow, Separator, Stack, StackSidebar,
 };
 use serde_json::{json, Value};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -27,6 +30,55 @@ enum UiMessage {
     Snapshot(Value),
     Event { title: String, description: String },
     Error(String),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum DesktopCommand {
+    ShowDashboard,
+    ShowPreferences,
+    Quit,
+}
+
+#[derive(Debug)]
+struct TactTray {
+    commands: Sender<DesktopCommand>,
+}
+
+impl ksni::Tray for TactTray {
+    fn id(&self) -> String { "tact".into() }
+    fn title(&self) -> String { "Tact".into() }
+    fn icon_name(&self) -> String { "computer-symbolic".into() }
+    fn activate(&mut self, _x: i32, _y: i32) {
+        let _ = self.commands.send(DesktopCommand::ShowDashboard);
+    }
+
+    fn menu(&self) -> Vec<ksni::menu::MenuItem<Self>> {
+        use ksni::menu::StandardItem;
+        vec![
+            StandardItem {
+                label: "Open Tact".into(),
+                activate: Box::new(|tray| {
+                    let _ = tray.commands.send(DesktopCommand::ShowDashboard);
+                }),
+                ..Default::default()
+            }.into(),
+            StandardItem {
+                label: "Preferences…".into(),
+                activate: Box::new(|tray| {
+                    let _ = tray.commands.send(DesktopCommand::ShowPreferences);
+                }),
+                ..Default::default()
+            }.into(),
+            ksni::menu::MenuItem::Separator,
+            StandardItem {
+                label: "Quit Tact".into(),
+                activate: Box::new(|tray| {
+                    let _ = tray.commands.send(DesktopCommand::Quit);
+                }),
+                ..Default::default()
+            }.into(),
+        ]
+    }
 }
 
 #[derive(Clone)]
@@ -62,7 +114,10 @@ fn main() {
 
 fn build(app: &Application) {
     install_style();
+    app.hold();
     let (command_tx, command_rx) = unbounded_channel();
+    let (desktop_tx, desktop_rx) = mpsc::channel();
+    let tray_handle = TactTray { commands: desktop_tx }.spawn().ok();
     let (ui_tx, ui_rx) = mpsc::channel();
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Runtime::new().expect("network runtime");
@@ -95,6 +150,11 @@ fn build(app: &Application) {
         .content(&toolbar)
         .build();
 
+    window.connect_close_request(|window| {
+        window.set_visible(false);
+        glib::Propagation::Stop
+    });
+
     process_ui_messages(
         ui_rx,
         root_stack,
@@ -107,7 +167,44 @@ fn build(app: &Application) {
         connection_label,
         toast_overlay,
     );
-    window.present();
+    let preferences: Rc<RefCell<Option<ApplicationWindow>>> = Rc::new(RefCell::new(None));
+    let window_for_tray = window.clone();
+    let app_for_tray = app.clone();
+    let preferences_for_tray = preferences.clone();
+    let settings_commands = command_tx.clone();
+    glib::timeout_add_local(Duration::from_millis(100), move || {
+        let _keep_tray_alive = &tray_handle;
+        while let Ok(command) = desktop_rx.try_recv() {
+            match command {
+                DesktopCommand::ShowDashboard => window_for_tray.present(),
+                DesktopCommand::ShowPreferences => {
+                    if preferences_for_tray.borrow().is_none() {
+                        let content = settings_page(settings_commands.clone());
+                        let preferences_window = ApplicationWindow::builder()
+                            .application(&app_for_tray)
+                            .title("Tact Preferences")
+                            .default_width(620)
+                            .default_height(520)
+                            .content(&content)
+                            .build();
+                        preferences_window.connect_close_request(|window| {
+                            window.set_visible(false);
+                            glib::Propagation::Stop
+                        });
+                        *preferences_for_tray.borrow_mut() = Some(preferences_window);
+                    }
+                    if let Some(preferences_window) = preferences_for_tray.borrow().as_ref() {
+                        preferences_window.present();
+                    }
+                }
+                DesktopCommand::Quit => {
+                    app_for_tray.quit();
+                    return ControlFlow::Break;
+                }
+            }
+        }
+        ControlFlow::Continue
+    });
 }
 
 fn pairing_view(commands: UnboundedSender<ClientCommand>) -> GtkBox {
@@ -204,13 +301,11 @@ fn dashboard_view(
     let (media_page, media) = media_page(commands.clone());
     let (events_page, events) = events_page();
     let deck_page = deck_page(commands.clone());
-    let settings_page = settings_page(commands);
     stack.add_titled(&system_page, Some("system"), "System");
     stack.add_titled(&developer_page, Some("developer"), "Developer");
     stack.add_titled(&media_page, Some("media"), "Media");
     stack.add_titled(&events_page, Some("events"), "Events");
     stack.add_titled(&deck_page, Some("deck"), "Deck");
-    stack.add_titled(&settings_page, Some("settings"), "Settings");
     layout.append(&sidebar_box);
     layout.append(&Separator::new(Orientation::Vertical));
     layout.append(&stack);
