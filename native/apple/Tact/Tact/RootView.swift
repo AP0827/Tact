@@ -36,37 +36,6 @@ struct DeviceSelectionView: View {
         blue: 0.88
     )
 
-    private let devices = [
-        TactDevice(
-            name: "Studio-Mac",
-            platform: "macOS",
-            model: "MacBook Pro",
-            os: "macOS 27",
-            ip: "192.168.1.42"
-        ),
-        TactDevice(
-            name: "Workstation",
-            platform: "Windows",
-            model: "Windows PC",
-            os: "Windows 11",
-            ip: "192.168.1.38"
-        ),
-        TactDevice(
-            name: "Linux-Dev",
-            platform: "Linux",
-            model: "Linux Workstation",
-            os: "Ubuntu 24.04",
-            ip: "192.168.1.51"
-        ),
-        TactDevice(
-            name: "Mac Mini",
-            platform: "macOS",
-            model: "Mac mini",
-            os: "macOS 27",
-            ip: "192.168.1.44"
-        )
-    ]
-
     var body: some View {
         ZStack {
             TactBackground()
@@ -98,7 +67,7 @@ struct DeviceSelectionView: View {
                         Spacer()
 
                         Button("Sign Out") {
-                            model.phase = .login
+                            Task { await model.signOut() }
                         }
                         .foregroundStyle(blue)
                     }
@@ -108,7 +77,7 @@ struct DeviceSelectionView: View {
                         spacing: 0
                     ) {
                         ForEach(
-                            Array(devices.enumerated()),
+                            Array(model.accountDevices.enumerated()),
                             id: \.element.id
                         ) { index, device in
 
@@ -129,7 +98,7 @@ struct DeviceSelectionView: View {
                             }
                             .buttonStyle(.plain)
 
-                            if index < devices.count - 1 {
+                            if index < model.accountDevices.count - 1 {
                                 Divider()
                                     .overlay(
                                         Color.white.opacity(0.08)
@@ -145,6 +114,31 @@ struct DeviceSelectionView: View {
                             cornerRadius: 24
                         )
                     )
+
+                    if model.accountDevices.isEmpty {
+                        ContentUnavailableView(
+                            "No computers yet",
+                            systemImage: "desktopcomputer",
+                            description: Text(
+                                "Sign in on a desktop Tact app to make it available here."
+                            )
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 34)
+                    }
+
+                    Button {
+                        Task {
+                            do {
+                                try await model.refreshDevices()
+                            } catch {
+                                model.error = error.localizedDescription
+                            }
+                        }
+                    } label: {
+                        Label("Refresh devices", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.tactSecondary)
 
                     Button {
                         /*
@@ -180,7 +174,7 @@ struct DeviceSelectionView: View {
 }
 
 struct DeviceRow: View {
-    let device: TactDevice
+    let device: TactAccountDevice
     let busy: Bool
 
     private let blue = Color(
@@ -212,16 +206,16 @@ struct DeviceRow: View {
                 alignment: .leading,
                 spacing: 4
             ) {
-                Text(device.name)
+                Text(device.label)
                     .font(.headline)
 
                 Text(
-                    "\(device.model) · \(device.os)"
+                    "\(device.model.isEmpty ? device.platform : device.model) · \(device.platform)"
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-                Text(device.ip)
+                Text(device.host ?? "Not available on this network")
                     .font(.caption.monospaced())
                     .foregroundStyle(.tertiary)
             }
@@ -231,8 +225,25 @@ struct DeviceRow: View {
             if busy {
                 ProgressView()
                     .tint(blue)
+            } else if device.canConnect {
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text("Connect")
+                        .font(
+                            .system(
+                                size: 15,
+                                weight: .semibold
+                            )
+                        )
+                        .foregroundStyle(blue)
+                    Label(
+                        device.active ? "Active now" : "Offline",
+                        systemImage: device.active ? "circle.fill" : "circle"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(device.active ? .green : .secondary)
+                }
             } else {
-                Text("Connect")
+                Text(device.active ? "This device" : "Offline")
                     .font(
                         .system(
                             size: 15,
@@ -244,18 +255,31 @@ struct DeviceRow: View {
         }
         .padding(14)
         .contentShape(Rectangle())
+        .opacity(device.canConnect ? 1 : 0.72)
     }
 
     private var icon: String {
         switch device.platform {
-        case "Windows":
+        case "windows":
             return "desktopcomputer"
 
-        case "Linux":
+        case "linux":
             return "server.rack"
 
-        default:
+        case "macos":
             return "laptopcomputer"
+
+        case "ipados":
+            return "ipad"
+
+        case "ios":
+            return "iphone"
+
+        case "android":
+            return "smartphone"
+
+        default:
+            return "desktopcomputer"
         }
     }
 }

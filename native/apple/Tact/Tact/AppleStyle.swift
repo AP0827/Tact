@@ -52,25 +52,32 @@ extension View {
         modifier(TactCard())
     }
 
+    @ViewBuilder
     func tactGlass(prominent: Bool = false) -> some View {
-        self
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        prominent
-                        ? Color.tactCyan.opacity(0.12)
-                        : Color.white.opacity(0.055)
-                    )
+        if #available(iOS 26.0, macOS 26.0, *) {
+            self.glassEffect(
+                prominent ? .regular.interactive() : .regular,
+                in: .rect(cornerRadius: 20)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        prominent
-                        ? Color.tactCyan.opacity(0.25)
-                        : Color.white.opacity(0.08),
-                        lineWidth: 1
+        } else {
+            self
+                .background(
+                    .thinMaterial,
+                    in: RoundedRectangle(
+                        cornerRadius: 20,
+                        style: .continuous
                     )
-            )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(
+                            prominent
+                            ? Color.tactCyan.opacity(0.25)
+                            : Color.white.opacity(0.08),
+                            lineWidth: 1
+                        )
+                )
+        }
     }
 }
 

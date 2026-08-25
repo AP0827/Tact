@@ -9,7 +9,7 @@ public actor PairingService {
     private let deviceKey = "tact.native.device.id"
     private let tokenKey = "tact.native.pair.token"
 
-    private func deviceID() -> String {
+    public func deviceID() -> String {
         if let existing = defaults.string(forKey: deviceKey) { return existing }
         let id = UUID().uuidString.lowercased()
         defaults.set(id, forKey: deviceKey)
@@ -17,6 +17,10 @@ public actor PairingService {
     }
 
     public func savedToken() -> String? { SecureStore.shared.get(tokenKey) }
+
+    public func saveTrustedToken(_ token: String) {
+        SecureStore.shared.set(token, for: tokenKey)
+    }
 
     public func pairWithOTP(host: String, port: Int, otp: String, label: String) async throws -> String {
         let id = deviceID()

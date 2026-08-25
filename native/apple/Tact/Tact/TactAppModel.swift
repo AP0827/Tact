@@ -23,6 +23,8 @@ final class TactAppModel: ObservableObject {
     @Published var snapshot = TactSnapshot()
     @Published var events: [[String: AnySendable]] = []
     @Published var selectedDevice: TactDevice?
+    @Published var accountDevices: [TactAccountDevice] = []
+    @Published var account: TactAccount?
     @Published var error: String?
     @Published var isBusy = false
     @Published var demoMode = false
@@ -36,6 +38,17 @@ final class TactAppModel: ObservableObject {
 
     let client = TactClient.shared
     let pairing = PairingService.shared
+    let accountService = AccountService.shared
+
+    var accountServiceURL: URL? {
+        if let configured = Bundle.main.object(
+            forInfoDictionaryKey: "TACTAccountServiceURL"
+        ) as? String,
+           !configured.isEmpty {
+            return URL(string: configured)
+        }
+        return URL(string: "http://127.0.0.1:8000")
+    }
 
     init() {
         messageTask = Task {
@@ -80,31 +93,116 @@ final class TactAppModel: ObservableObject {
     // MARK: - Authentication
 
     func signIn(email: String, password: String) async {
-        error = "Account sign-in requires the production identity service. Pair with your host using IP + OTP."
+        error = nil
+        isBusy = true
+        defer { isBusy = false }
+        guard let accountServiceURL else {
+            error = "The account service is not configured."
+            return
+        }
+        do {
+            let session = try await accountService.signIn(
+                serviceURL: accountServiceURL,
+                email: email,
+                password: password
+            )
+            account = session.account
+            try await registerCurrentDevice()
+            try await refreshDevices()
+            phase = .devices
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
-    func demoSocialLogin(_ provider: String) async {
-        error = "\(provider) sign-in requires its production OAuth configuration. Pair with your host using IP + OTP."
+    func signIn(provider: String, identityToken: String) async {
+        error = nil
+        isBusy = true
+        defer { isBusy = false }
+        guard let accountServiceURL else {
+            error = "The account service is not configured."
+            return
+        }
+        do {
+            let session = try await accountService.signIn(
+                serviceURL: accountServiceURL,
+                provider: provider.lowercased(),
+                identityToken: identityToken
+            )
+            account = session.account
+            try await registerCurrentDevice()
+            try await refreshDevices()
+            phase = .devices
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func refreshDevices() async throws {
+        guard let accountServiceURL else {
+            throw AccountServiceError.invalidServiceURL
+        }
+        accountDevices = try await accountService.devices(
+            serviceURL: accountServiceURL
+        )
+    }
+
+    private func registerCurrentDevice() async throws {
+        guard let accountServiceURL else {
+            throw AccountServiceError.invalidServiceURL
+        }
+        let id = await pairing.deviceID()
+        #if os(iOS)
+        let idiom = UIDevice.current.userInterfaceIdiom
+        let type = idiom == .pad ? "tablet" : "phone"
+        let platform = idiom == .pad ? "ipados" : "ios"
+        let modelName = UIDevice.current.model
+        #else
+        let type = "desktop"
+        let platform = "macos"
+        let modelName = "Mac"
+        #endif
+        try await accountService.registerDevice(
+            serviceURL: accountServiceURL,
+            deviceID: id,
+            label: deviceName,
+            platform: platform,
+            deviceType: type,
+            model: modelName
+        )
     }
 
     // MARK: - Device Connection
 
-    func connect(device: TactDevice) async {
+    func connect(device: TactAccountDevice) async {
         error = nil
         isBusy = true
-        selectedDevice = device
-
-        guard let token = await pairing.savedToken() else {
-            error = "This host is not paired. Use IP + OTP to pair it first."
-            isBusy = false
-            return
-        }
+        selectedDevice = TactDevice(
+            id: device.deviceID,
+            name: device.label,
+            platform: device.platform,
+            model: device.model,
+            os: device.platform,
+            ip: device.host ?? "",
+            connected: device.active
+        )
 
         do {
+            guard let accountServiceURL else {
+                throw AccountServiceError.invalidServiceURL
+            }
+            let deviceID = await pairing.deviceID()
+            let accountConnection = try await accountService.connection(
+                serviceURL: accountServiceURL,
+                targetDeviceID: device.deviceID,
+                clientDeviceID: deviceID,
+                clientLabel: deviceName
+            )
+            await pairing.saveTrustedToken(accountConnection.token)
             try await client.connect(
-                host: device.ip,
-                port: 8000,
-                token: token
+                host: accountConnection.host,
+                port: accountConnection.port,
+                token: accountConnection.token
             )
             demoMode = false
             connection = .connected
@@ -178,6 +276,17 @@ final class TactAppModel: ObservableObject {
         connection = .disconnected
         phase = .login
         authMode = 0
+    }
+
+    func signOut() async {
+        await client.disconnect()
+        await accountService.signOut(serviceURL: accountServiceURL)
+        await pairing.forget()
+        account = nil
+        accountDevices = []
+        selectedDevice = nil
+        connection = .disconnected
+        phase = .login
     }
 
     // MARK: - Actions

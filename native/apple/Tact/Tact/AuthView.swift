@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct AuthView: View {
     @EnvironmentObject private var model: TactAppModel
@@ -10,6 +11,7 @@ struct AuthView: View {
     @State private var host = ""
     @State private var otp = ""
     @State private var mode: Int
+    @StateObject private var googleSignIn = GoogleSignInCoordinator()
 
     private let blue = Color(
         red: 0.02,
@@ -116,46 +118,56 @@ struct AuthView: View {
                     Spacer(minLength: 18)
 
                     VStack(spacing: 12) {
-                        Button {
-                            Task {
-                                await model.demoSocialLogin("Apple")
-                            }
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "apple.logo")
-                                    .font(
-                                        .system(
-                                            size: 19,
-                                            weight: .medium
-                                        )
+                        SignInWithAppleButton(.continue) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            switch result {
+                            case .success(let authorization):
+                                guard
+                                    let credential = authorization.credential
+                                        as? ASAuthorizationAppleIDCredential,
+                                    let data = credential.identityToken,
+                                    let token = String(data: data, encoding: .utf8)
+                                else {
+                                    model.error = "Apple did not return an identity token."
+                                    return
+                                }
+                                Task {
+                                    await model.signIn(
+                                        provider: "apple",
+                                        identityToken: token
                                     )
-
-                                Text("Continue with Apple")
-                                    .font(
-                                        .system(
-                                            size: 16,
-                                            weight: .semibold
-                                        )
-                                    )
+                                }
+                            case .failure(let error):
+                                model.error = error.localizedDescription
                             }
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(
-                                Color.white,
-                                in: RoundedRectangle(cornerRadius: 14)
-                            )
                         }
+                        .signInWithAppleButtonStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
 
                         Button {
                             Task {
-                                await model.demoSocialLogin("Google")
+                                do {
+                                    let token = try await googleSignIn.signIn()
+                                    await model.signIn(
+                                        provider: "google",
+                                        identityToken: token
+                                    )
+                                } catch {
+                                    model.error = error.localizedDescription
+                                }
                             }
                         } label: {
                             HStack(spacing: 10) {
                                 GoogleLogo()
 
-                                Text("Continue with Google")
+                                Text(
+                                    googleSignIn.isAuthenticating
+                                    ? "Authenticating…"
+                                    : "Continue with Google"
+                                )
                                     .font(
                                         .system(
                                             size: 16,
@@ -178,6 +190,7 @@ struct AuthView: View {
                                     )
                             )
                         }
+                        .disabled(googleSignIn.isAuthenticating || model.isBusy)
 
                         Text("Secure remote control for your computers.")
                             .font(.caption2)
