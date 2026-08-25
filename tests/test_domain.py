@@ -10,6 +10,7 @@ from tact.agent.config import Config, PairedDevice, PendingPairing
 from tact.agent.events import Event, EventBus
 from tact.agent.integrations.system import SystemIntegration
 from tact.agent.actions import ActionRegistry
+from tact.agent.accounts import AccountStore
 
 
 class ConfigTests(unittest.TestCase):
@@ -90,6 +91,87 @@ class ConfigTests(unittest.TestCase):
         config._data["pending_pairings"] = new_pendings
         config._save()
         self.assertIsNone(config.get_pending_pairing(pending.pending_id))
+
+
+class AccountStoreTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = AccountStore(Path(self.tmp.name) / "accounts.sqlite3")
+
+    def tearDown(self):
+        self.store.close()
+        self.tmp.cleanup()
+
+    def test_email_registration_login_and_session_expiry_boundary(self):
+        registered = self.store.register_email(
+            "Developer@Example.com",
+            "correct-horse-battery-staple",
+            "Developer",
+        )
+        self.assertEqual(registered.email, "developer@example.com")
+        self.assertIsNotNone(self.store.session(registered.token))
+
+        authenticated = self.store.authenticate_email(
+            "developer@example.com",
+            "correct-horse-battery-staple",
+        )
+        self.assertIsNotNone(authenticated)
+        self.assertEqual(authenticated.account_id, registered.account_id)
+        self.assertIsNone(
+            self.store.authenticate_email("developer@example.com", "wrong-password")
+        )
+
+    def test_provider_identity_links_to_existing_email_account(self):
+        email_session = self.store.register_email(
+            "developer@example.com",
+            "correct-horse-battery-staple",
+        )
+        provider_session = self.store.authenticate_provider(
+            "google",
+            {
+                "sub": "google-subject",
+                "email": "developer@example.com",
+                "email_verified": True,
+            },
+        )
+        self.assertEqual(provider_session.account_id, email_session.account_id)
+
+    def test_devices_are_scoped_to_account_and_expose_connectability(self):
+        first = self.store.register_email(
+            "first@example.com",
+            "correct-horse-battery-staple",
+        )
+        second = self.store.register_email(
+            "second@example.com",
+            "correct-horse-battery-staple",
+        )
+        registered = self.store.upsert_device(
+            first.account_id,
+            "mac-1",
+            "Studio Mac",
+            "macos",
+            "desktop",
+            "Mac Studio",
+            "192.168.1.42",
+            8000,
+        )
+        self.assertTrue(registered.active)
+        self.assertTrue(registered.can_connect)
+        self.assertEqual(len(self.store.list_devices(first.account_id)), 1)
+        self.assertEqual(self.store.list_devices(second.account_id), [])
+
+    def test_logout_revokes_only_requested_session(self):
+        first = self.store.register_email(
+            "developer@example.com",
+            "correct-horse-battery-staple",
+        )
+        second = self.store.authenticate_email(
+            "developer@example.com",
+            "correct-horse-battery-staple",
+        )
+        self.store.revoke_session(first.token)
+        self.assertIsNone(self.store.session(first.token))
+        self.assertIsNotNone(self.store.session(second.token))
 
 
 class EventBusTests(unittest.TestCase):

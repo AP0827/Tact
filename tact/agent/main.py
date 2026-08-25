@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -14,6 +14,7 @@ from .actions import ActionRegistry
 from .monitoring import StateMonitor
 from .events import Event
 from .config import Config
+from .accounts import AccountStore, AuthSession, ProviderTokenVerifier
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
@@ -31,6 +32,8 @@ manager = ConnectionManager()
 actions = ActionRegistry()
 monitor = StateMonitor(actions.event_bus, actions.integrations)
 config = Config()
+accounts = AccountStore()
+provider_tokens = ProviderTokenVerifier()
 
 _otp = config.generate_pairing_token()
 _logger = logging.getLogger("tact.startup")
@@ -199,6 +202,180 @@ async def pair_reset_all():
     config._data["pending_pairings"] = []
     config._save()
     return {"ok": True}
+
+
+def _account_session(authorization: Optional[str]) -> AuthSession:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.casefold() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="authentication_required")
+    session = accounts.session(token)
+    if session is None:
+        raise HTTPException(status_code=401, detail="invalid_or_expired_session")
+    return session
+
+
+def _session_response(session: AuthSession) -> dict[str, Any]:
+    return {
+        "token": session.token,
+        "expires_at": session.expires_at,
+        "account": {
+            "account_id": session.account_id,
+            "email": session.email,
+            "display_name": session.display_name,
+            "provider": session.provider,
+        },
+    }
+
+
+def _device_response(device: Any) -> dict[str, Any]:
+    return {
+        "device_id": device.device_id,
+        "label": device.label,
+        "platform": device.platform,
+        "device_type": device.device_type,
+        "model": device.model,
+        "host": device.host,
+        "port": device.port,
+        "last_seen": device.last_seen,
+        "active": device.active,
+        "can_connect": device.can_connect,
+    }
+
+
+@app.post("/api/auth/register")
+async def account_register(payload: dict):
+    try:
+        session = accounts.register_email(
+            str(payload.get("email") or ""),
+            str(payload.get("password") or ""),
+            str(payload.get("display_name") or ""),
+        )
+    except ValueError as error:
+        detail = str(error)
+        status = 409 if detail == "email_already_registered" else 400
+        raise HTTPException(status_code=status, detail=detail) from error
+    return _session_response(session)
+
+
+@app.post("/api/auth/login")
+async def account_login(payload: dict):
+    session = accounts.authenticate_email(
+        str(payload.get("email") or ""),
+        str(payload.get("password") or ""),
+    )
+    if session is None:
+        raise HTTPException(status_code=401, detail="incorrect_email_or_password")
+    return _session_response(session)
+
+
+@app.post("/api/auth/provider")
+async def account_provider_login(payload: dict):
+    provider = str(payload.get("provider") or "").strip().lower()
+    identity_token = str(payload.get("identity_token") or "").strip()
+    if not identity_token:
+        raise HTTPException(status_code=400, detail="identity_token_required")
+    try:
+        claims = await asyncio.to_thread(
+            provider_tokens.verify,
+            provider,
+            identity_token,
+        )
+        session = accounts.authenticate_provider(provider, claims)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        _logger.warning("Provider token verification failed for %s: %s", provider, error)
+        raise HTTPException(status_code=401, detail="invalid_provider_token") from error
+    return _session_response(session)
+
+
+@app.get("/api/auth/session")
+async def account_session(authorization: Optional[str] = Header(default=None)):
+    return _session_response(_account_session(authorization))
+
+
+@app.post("/api/auth/logout")
+async def account_logout(authorization: Optional[str] = Header(default=None)):
+    session = _account_session(authorization)
+    accounts.revoke_session(session.token)
+    return {"ok": True}
+
+
+@app.get("/api/account/devices")
+async def account_devices(authorization: Optional[str] = Header(default=None)):
+    session = _account_session(authorization)
+    return {
+        "devices": [
+            _device_response(device)
+            for device in accounts.list_devices(session.account_id)
+        ]
+    }
+
+
+@app.post("/api/account/devices")
+async def account_device_upsert(
+    payload: dict,
+    authorization: Optional[str] = Header(default=None),
+):
+    session = _account_session(authorization)
+    try:
+        device = accounts.upsert_device(
+            account_id=session.account_id,
+            device_id=str(payload.get("device_id") or ""),
+            label=str(payload.get("label") or ""),
+            platform=str(payload.get("platform") or "unknown"),
+            device_type=str(payload.get("device_type") or ""),
+            model=str(payload.get("model") or ""),
+            host=str(payload.get("host") or "").strip() or None,
+            port=int(payload["port"]) if payload.get("port") is not None else None,
+        )
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"device": _device_response(device)}
+
+
+@app.delete("/api/account/devices/{device_id}")
+async def account_device_remove(
+    device_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    session = _account_session(authorization)
+    if not accounts.remove_device(session.account_id, device_id):
+        raise HTTPException(status_code=404, detail="device_not_found")
+    config.unpair_device(device_id)
+    return {"ok": True}
+
+
+@app.post("/api/account/devices/connect")
+async def account_device_connect(
+    payload: dict,
+    authorization: Optional[str] = Header(default=None),
+):
+    session = _account_session(authorization)
+    target_id = str(payload.get("target_device_id") or "")
+    client_id = str(payload.get("client_device_id") or "")
+    client_label = str(payload.get("client_label") or "").strip() or client_id
+    if not target_id or not client_id:
+        raise HTTPException(
+            status_code=400,
+            detail="target_device_id_and_client_device_id_required",
+        )
+    target = accounts.device(session.account_id, target_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="device_not_found")
+    if not target.can_connect:
+        raise HTTPException(status_code=409, detail="device_not_connectable")
+    config.pair_device(client_id, client_label)
+    return {
+        "connection": {
+            "host": target.host,
+            "port": target.port,
+            "websocket_path": "/ws",
+            "token": client_id,
+            "target_device_id": target.device_id,
+            "target_label": target.label,
+        }
+    }
 
 
 @app.get("/api/state")
