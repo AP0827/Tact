@@ -44,11 +44,22 @@ build/
 .gradle/
 android/.gradle/
 android/build/
+native/android/.gradle/
+native/android/**/build/
 
 # iOS / macOS
 ios/Pods/
 macos/Pods/
 macos/Flutter/ephemeral/
+native/apple/**/.build/
+native/apple/**/.swiftpm/
+native/core/**/.build/
+native/core/**/.swiftpm/
+
+# Rust / .NET
+native/linux/**/target/
+native/windows/**/bin/
+native/windows/**/obj/
 
 # OS
 .DS_Store

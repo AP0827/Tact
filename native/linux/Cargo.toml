@@ -1,0 +1,13 @@
+[package]
+name = "tact-linux"
+version = "2.0.0"
+edition = "2021"
+
+[dependencies]
+futures-util = "0.3"
+gtk = { version = "0.10", package = "gtk4" }
+libadwaita = { version = "0.8", package = "libadwaita" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-tungstenite = "0.27"
