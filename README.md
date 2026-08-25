@@ -1,6 +1,14 @@
 # Tact — Developer Control Surface
 
+> Production clients now live under [`native/`](native/): Swift/SwiftUI for
+> iOS, iPadOS, and macOS; Kotlin/Jetpack Compose for Android; WinUI 3/C# for
+> Windows; and Rust/GTK4/libadwaita for Linux. The Flutter client in [`app/`](app/)
+> remains available during migration and is no longer the primary client stack.
+
 Tact turns your phone into a control surface for your laptop. A desktop agent runs locally on the laptop, exposes a allowlisted set of actions, understands *what you are doing right now* (active app, project, branch, workflow), and streams state and events to your phone over a local WebSocket.
+
+Native build, identity-provider, and packaging instructions are in
+[`docs/NATIVE_APPS.md`](docs/NATIVE_APPS.md).
 
 There are three moving parts:
 
