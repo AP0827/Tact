@@ -27,8 +27,8 @@ Adding a new capability (e.g. "figma", "video editing") is:
   2. import + instantiate it in ``ActionRegistry`` (actions.py).
 
 Registration is explicit (good development practice): one import + one
-line in ``ActionRegistry.integrations``. No changes to main.py,
-monitoring.py, or the Flutter app needed beyond an optional UI card.
+line in ``ActionRegistry.integrations``. No changes to main.py or
+monitoring.py are needed; native clients can add an optional platform view.
 """
 
 from __future__ import annotations

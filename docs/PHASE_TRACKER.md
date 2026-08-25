@@ -180,11 +180,11 @@ Active App + Project + Current State + Recent Events → TACT SURFACE
 
 | Status | Item |
 | ------ | ---- |
-| [x] | Responsive Flutter app (currently 4 tabs: System / Developer / Media / Events) |
+| [x] | Responsive native iOS/iPadOS and Android applications |
 | [x] | Portrait, touch-friendly, information-dense, dark theme |
-| [ ] | Declarative layout protocol (agent describes UI) — *currently hardcoded Flutter tabs; replaced by Tact Surface in Phase 2–3* |
+| [ ] | Declarative layout protocol (agent describes UI) — native surfaces currently use shared protocol models with platform-specific layouts |
 
-> Note: PRODUCT_SPEC §23 specifies a React/Vite/Tailwind web client; the implementation moved to a **Flutter app** (`app/`). Accepted architectural deviation — tracker follows the actual stack.
+> The production UI is implemented as separate native clients under `native/`.
 
 ### System integration
 
@@ -253,7 +253,7 @@ Active App + Project + Current State + Recent Events → TACT SURFACE
 
 | Status | Item |
 | ------ | ---- |
-| [x] | **Derive project from window title** — For editors/terminals, parse the folder/basename out of the title (e.g. "main.dart — Tact"). |
+| [x] | **Derive project from window title** — For editors/terminals, parse the folder/basename out of the title (e.g. "MainActivity.kt — Tact"). |
 | [x] | **Derive branch** — Use `git discover_root` + `git status` on the resolved path; attach `branch`. |
 | [x] | **Workspace fallback** — If no project resolvable from window, fall back to the agent's current workspace (`system.set_workspace`). |
 
@@ -306,7 +306,7 @@ VS Code        Blender        Photoshop        Teams
 | Status | Item |
 | ------ | ---- |
 | [x] | **Surface registry** — Map `context_id → profile` (title, action buttons, state card kind). Lives in `integrations/context/surfaces.py`; buttons reference allowlisted registry actions; `context.surfaces` lists them. |
-| [x] | **Surface widget** — Flutter `SurfaceTab` renders the active profile: header (icon + title + workflow + pin), action grid, state card. |
+| [x] | **Surface view** — native clients render the active profile with a header, workflow state, action grid, and state card. |
 | [x] | **Fallback surface** — Unknown apps and unavailable detection get the "Desktop" surface (generic system controls) so the surface is never empty. |
 | [x] | **Manual pin** — `context.override` / `context.clear_override` + pin toggle in the surface header (pins the current app/project context). |
 | [x] | **Per-app action sets** — vscode/terminal/chrome/edge/firefox/spotify/fallback each define their own action lists; unknown apps get the fallback. |
@@ -537,7 +537,7 @@ From the review mentioning switching between audio devices (headphones ↔ speak
 | ------ | ---- | ----------- |
 | [x] | Central `EventBus` | Event: type, timestamp, severity, source, title, message, data, actions. |
 | [x] | git.state_changed / vscode.state_changed / docker.state_changed | Emitted by `StateMonitor` on poll changes. |
-| [x] | Event feed broadcast | `{type: "event"}` pushed over WebSocket; rendered in `event_feed.dart`. |
+| [x] | Event feed broadcast | `{type: "event"}` pushed over WebSocket and rendered by native event views. |
 
 ### 6.2 Additional event sources
 
@@ -646,7 +646,7 @@ Tact build failed
 | [ ] | Terminal jobs + output | Live running jobs (`npm test`, `docker build`, `pytest`) with status + elapsed; tap → full output; feeds the Terminal surface state card. |
 | [ ] | Find / open specific file | Path search over the workspace; open in VS Code at line. |
 | [ ] | Meeting controls | Teams/Slack/Zoom: mute, camera, share, timer, leave; feeds the Teams surface state card + Phase 5 meeting state. |
-| [ ] | AI-tool integration foundations | Open ChatGPT/Claude/Gemini; optionally send a selected snippet/error. |
+| [ ] | AI-tool integration foundations | Open a configured assistant; optionally send a selected snippet/error. |
 
 ### 9.2 🎛 Remote computer control
 
@@ -657,7 +657,7 @@ MY LAPTOP
 ● Online
 
 RUNNING
-Flutter build      ●
+Android build      ●
 Docker             ●
 Model training     ● 67%
 
@@ -760,7 +760,7 @@ The reviews tempt you to add everything. These are proofs of breadth, not things
 | ------ | ---- | ----------- |
 | [ ] | Environment inspection | Authorized scan (apps, docker, git, browser) → offer workspace/surface generation. |
 | [ ] | Surface generation | Generate valid context surfaces with allowlisted actions; user edits result. |
-| [ ] | Provider-agnostic | OpenAI / Anthropic / Google / local models. |
+| [ ] | Provider-agnostic | Support configurable cloud and local model providers. |
 | [ ] | Build-failure assistant | `[OPEN] [EXPLAIN] [DEBUG WITH AI] [REBUILD]` on a failed build event. |
 | [ ] | Confirmation for code changes | Any AI-generated code modification requires explicit user confirmation. |
 

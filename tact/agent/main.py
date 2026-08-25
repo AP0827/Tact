@@ -21,9 +21,8 @@ from .accounts import AccountStore, AuthSession, ProviderTokenVerifier, AppleWeb
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
-# Browser clients (Flutter web served from a dev server) call the agent
-# cross-origin. Auth is OTP + explicit laptop-side approval, so any origin is
-# acceptable for this LAN tool.
+# The minimal browser fallback may call the agent cross-origin. Authentication
+# still requires an account session or explicit laptop-approved LAN pairing.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

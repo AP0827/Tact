@@ -11,7 +11,7 @@ item remains, so the issue stays open.
 | --- | --- | --- |
 | #3 | Docker container list | Closed: agent snapshot and phone/native lists |
 | #4 | Docker start/stop/restart | Closed: allowlisted actions and phone controls |
-| #5 | Docker phone status widget | Closed: Flutter card and native developer views |
+| #5 | Docker phone status widget | Closed: native mobile developer views |
 | #6 | Battery telemetry | Closed: agent telemetry and mobile rendering |
 | #7 | Hostname, OS, uptime | Open: these three fields are not complete |
 | #8 | Declarative layout protocol | Partial: context surfaces are declarative; all hardcoded tabs are not replaced |

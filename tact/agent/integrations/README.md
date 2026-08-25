@@ -112,7 +112,7 @@ the one cross-integration view and is assembled explicitly.
    The action `figma.status` is now callable and the snapshot carries a
    `figma` key. Nothing in `main.py` or `monitoring.py` changes.
 
-3. (Optional) Add a Flutter card in `app/lib/features/<name>/`.
+3. (Optional) add a platform-native view under the relevant `native/` project.
 
 ## State change events
 

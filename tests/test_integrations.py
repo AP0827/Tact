@@ -423,7 +423,7 @@ class ContextIntegrationTests(unittest.TestCase):
             "xprop": [
                 Result(stdout="window id # 0x3600004\n"),
                 Result(
-                    stdout='_NET_WM_NAME(UTF8_STRING) = "main.dart — Tact"\n'
+                    stdout='_NET_WM_NAME(UTF8_STRING) = "MainActivity.kt — Tact"\n'
                            'WM_CLASS(STRING) = "code", "Code"\n'
                 ),
             ],
@@ -494,7 +494,7 @@ class ContextIntegrationTests(unittest.TestCase):
         from tact.agent.events import EventBus
 
         integration = ContextIntegration()
-        window = {"id": "0x1", "class": "code", "title": "main.dart — Tact"}
+        window = {"id": "0x1", "class": "code", "title": "MainActivity.kt — Tact"}
         with patch("tact.agent.integrations.context.integration.active_window", return_value=window):
             integration.workspace_path = "/home/user/Tact"
 
@@ -584,7 +584,7 @@ class ContextIntegrationTests(unittest.TestCase):
 
     @patch("tact.agent.integrations.context.integration.active_window")
     def test_surface_selected_for_known_app(self, mock_window):
-        mock_window.return_value = {"id": "0x1", "class": "code", "title": "main.dart — Tact"}
+        mock_window.return_value = {"id": "0x1", "class": "code", "title": "MainActivity.kt — Tact"}
         integration = ContextIntegration()
         with patch.object(integration._git, "discover_root", return_value=None):
             result = integration.detect()

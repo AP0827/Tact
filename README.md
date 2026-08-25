@@ -1,469 +1,290 @@
-# Tact — Developer Control Surface
+# Tact — Native Developer Control Surface
 
-> Production clients now live under [`native/`](native/): Swift/SwiftUI for
-> iOS, iPadOS, and macOS; Kotlin/Jetpack Compose for Android; WinUI 3/C# for
-> Windows; and Rust/GTK4/libadwaita for Linux. The Flutter client in [`app/`](app/)
-> remains available during migration and is no longer the primary client stack.
+Tact turns a phone or tablet into a secure control surface for a computer. A
+local FastAPI agent exposes an allowlisted action protocol, publishes live
+telemetry and context, and connects to separate native clients for every
+supported operating system.
 
-Tact turns your phone into a control surface for your laptop. A desktop agent runs locally on the laptop, exposes a allowlisted set of actions, understands *what you are doing right now* (active app, project, branch, workflow), and streams state and events to your phone over a local WebSocket.
+The client stack is fully native:
 
-Native build, identity-provider, and packaging instructions are in
-[`docs/NATIVE_APPS.md`](docs/NATIVE_APPS.md).
+| Platform | Technology | Location |
+| --- | --- | --- |
+| iOS and iPadOS | Swift, SwiftUI | `native/apple/Tact` |
+| macOS | Swift, SwiftUI, MenuBarExtra | `native/apple/TactApple` |
+| Android | Kotlin, Jetpack Compose, Material 3 | `native/android` |
+| Windows | C#, WinUI 3, Win32 notification area | `native/windows/TactWindows` |
+| Linux | Rust, GTK4, libadwaita, StatusNotifierItem | `native/linux` |
+| Shared Apple services | Swift actors, URLSession, Keychain | `native/core/TactCore` |
 
-There are three moving parts:
+The legacy cross-platform client has been removed. Native clients and the
+Python agent communicate through the same REST and WebSocket contracts without
+a shared UI runtime.
 
-- **Tact Agent** — a Python/FastAPI desktop agent running on the laptop (the brain)
-- **Tact phone client** — a Flutter app that renders the contextual interface and executes actions
-- **Tact host companion** — a Flutter desktop tray app on the laptop that shows the pairing OTP and handles pairing approvals without touching the terminal
+## Features
 
-## What this contains
+- Native, adaptive phone and tablet interfaces for iOS, iPadOS, and Android.
+- Liquid Glass on Apple 26+ with system-material fallback on iOS/iPadOS 17+
+  and macOS 14+.
+- Material 3 components, dynamic color, edge-to-edge layout, system light/dark
+  themes, and adaptive navigation on Android.
+- Menu-bar macOS app and notification-area Windows/Linux apps. Dashboard and
+  preferences open as separate windows; closing them leaves the tray app alive.
+- Email/password, Sign in with Apple, Google Sign-In, and direct IP + one-time
+  code authentication.
+- Account-scoped trusted-device registry with platform icons, active state,
+  endpoint discovery, and one-tap connection.
+- Secure LAN pairing with a six-digit, single-use code and host approval.
+- Live CPU, memory, disk, battery, Git, Docker, media, clipboard, window, and
+  developer-workflow state.
+- Context-aware surfaces driven by the focused app, project, branch, Docker
+  activity, and manual overrides.
+- An allowlisted action registry covering system controls, VS Code, Git,
+  Docker, media, clipboard, browsers, meetings, windows, projects, and terminals.
 
-- FastAPI desktop agent with WebSocket server and HTTP pairing API
-- **Allowlisted action registry** — ~85 actions across 12 integrations (`system`, `vscode`, `git`, `media`, `docker`, `clipboard`, `context`, `chrome`, `teams`, `window`, `project`, `terminal`); every action runs through the registry, nothing is ad-hoc
-- **Context Engine** — detects the focused application, resolves the active project + git branch, classifies the workflow via signal aggregation (git/docker), tracks recent apps, and pushes `context.changed` events so the phone surface can react
-- **Context surfaces** — the phone's first tab renders the active surface (VS Code Run/Debug/Test, Chrome nav, Teams meeting controls, Spotify transport, Desktop fallback) with a live state card, project card, and workspace glance row
-- **App Launcher tab** — known apps grouped into Development/Communication/Media with running indicators, one-tap launch or focus, recent-apps row
-- **Window & workspace controls** — focus/move/minimize/maximize/close plus Coding/Meeting/Media layout presets (wmctrl)
-- **Project workspace** — one-tap `project.open` (VS Code + terminal + folder) and per-project resource buttons on the surface
-- **Persistent Control Strip** — compact bar on every tab (volume slider, play/pause, lock, screenshot) with an expandable sheet for volume, brightness (xrandr), and audio-output switching (pactl sinks)
-- **Integration pattern** — folder-per-capability separation (`tact/agent/integrations/<name>/`), each integration contributing `actions()`, `snapshot()`, and optionally `monitor()`; see `tact/agent/integrations/README.md`
-- System telemetry (CPU, RAM, disk, battery, volume) with circular gauges on the phone
-- Git state, tree visualization, branch switching, pull/push/commit, commit graph
-- Docker container status + start/stop/restart/logs (degrades gracefully when the daemon or group permissions are unavailable)
-- Media controls (Spotify, browser media, VLC via MPRIS) with a media-key fallback for flaky MPRIS players
-- Clipboard bridge: laptop → phone, phone → laptop, in-agent history (text only)
-- VS Code open-workspace detection and recent-workspaces dropdown
-- Secure local pairing with 6-digit OTP and laptop-side approval; device tokens persisted in `~/.tact/config.json`
-- Event bus with severity levels, actionable payloads, and a phone-side event feed
-- Flutter phone client (context surface + Apps / System / Developer / Media / Events tabs)
-- Flutter host companion tray app (OTP display, pairing approvals, agent port config)
-- mDNS agent discovery on the client (agent-side advertisement pending)
-- Single-file web client fallback served by the agent
+## Architecture
+
+```text
+native/
+├── apple/
+│   ├── Tact/                 # iOS and iPadOS Xcode project
+│   ├── TactApple/            # macOS menu-bar application
+│   └── TactHost/             # lightweight Apple host companion
+├── android/                  # Android Gradle project
+├── windows/TactWindows/      # Windows App SDK / WinUI 3 project
+├── linux/                    # GTK4/libadwaita application
+└── core/TactCore/            # shared Apple networking and secure storage
+
+tact/agent/
+├── main.py                   # FastAPI REST and WebSocket endpoints
+├── accounts.py               # accounts, sessions, providers, device registry
+├── actions.py                # allowlisted action registry
+├── config.py                 # local pairing and trusted-device state
+├── events.py                 # event bus
+├── monitoring.py             # state-change monitoring
+└── integrations/             # platform and developer integrations
+
+client/index.html             # minimal browser fallback
+tests/                        # backend and integration tests
+docs/                         # architecture and roadmap documentation
+```
+
+The agent sends an initial snapshot after authentication, refreshes telemetry,
+and publishes state-change events. Clients send action identifiers and payloads;
+the agent executes only actions registered in `ActionRegistry`.
 
 ## Quick start
 
-### 0. System dependencies (Linux)
+### 1. Run the desktop agent
+
+Python 3.11 or newer is recommended.
 
 ```bash
-sudo apt install git playerctl xdotool wmctrl xclip x11-utils pactl
-```
-
-- **git** — required for all git actions (`status`, `branches`, `tree`, `log`, `add`, `pull`, `push`, `switch_branch`, `commit`).
-- **playerctl** — primary media transport (MPRIS). Controls Spotify, browser media sessions (Chrome/Chromium/Firefox), VLC, etc. Without it the agent reports `media.status` unavailable.
-- **xdotool** — media-key fallback (XF86Audio Play/Next/Prev) when a player's MPRIS registration is unreliable (snap Spotify), Chrome surface browser nav, and Teams meeting key combos.
-- **wmctrl** — window focus/activation (`media.open_spotify`, `system.focus_app`, `teams.*`), the Apps tab running-state list, and all `window.*` controls + layout presets.
-- **xclip** — clipboard read (with `xsel`/`wl-paste` fallbacks) and the image-clipboard capability probe.
-- **x11-utils** — `xprop` used by the Context Engine for active-window detection (X11; detection is unavailable under Wayland/headless).
-
-Optional, feature-gated:
-
-- **VS Code** (`code`/`code-insiders`/`codium`) — needed for `vscode.*` actions and workspace detection.
-- **pactl** (PulseAudio) — volume get/set/up/down/mute actions.
-- **docker CLI** — `docker.*` actions (container status + lifecycle).
-- **xdg-open / gio** — `system.open_url`/`system.open_project` launchers.
-
-### 1. Desktop agent
-
-```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn tact.agent.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Or:
-
-```bash
+python -m pip install -r requirements.txt
 python -m tact.agent
 ```
 
-The agent prints the pairing OTP to the terminal on startup.
-
-### 2. Phone client (Flutter)
+For development with reload:
 
 ```bash
-cd app
-flutter pub get
-flutter run -d <device-id>   # lib/main.dart — runs on a connected phone
+uvicorn tact.agent.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The phone must have **USB debugging** enabled (*Settings → Developer options*); Flutter will prompt
-to allow it on first connect. Find your device id with `flutter devices` (or `adb devices`).
-Hot reload: press `r` in the `flutter run` terminal, `R` for hot restart.
+The default service listens on port `8000`. Keep the computer and phone on the
+same trusted network when using direct pairing.
 
-#### First-time toolchain setup (Flutter + Android on Linux, no Android Studio)
+### 2. Configure account providers
+
+Email/password and direct LAN pairing require no external provider secret.
+Apple and Google authentication use deployment configuration:
+
+```text
+TACT_ACCOUNT_SERVICE_URL
+TACT_GOOGLE_CLIENT_ID
+TACT_GOOGLE_REDIRECT_URI
+TACT_APPLE_CLIENT_ID
+TACT_APPLE_TEAM_ID
+TACT_APPLE_KEY_ID
+TACT_APPLE_PRIVATE_KEY
+TACT_APPLE_REDIRECT_URI
+```
+
+Never commit private keys or provider secrets. Register
+`/api/auth/apple/callback` as the Apple service callback. Android reads
+`tactAccountServiceUrl` and `tactGoogleClientId` from Gradle properties. Apple
+builds read the corresponding Xcode build settings or environment values.
+
+### 3. Build a native client
+
+#### iOS and iPadOS
+
+Open `native/apple/Tact/Tact.xcodeproj` in Xcode, select the `Tact` scheme and
+an iPhone or iPad destination, configure signing, then run.
+
+An unsigned command-line verification build can be run with:
 
 ```bash
-# 1. Flutter SDK
-git clone -b stable https://github.com/flutter/flutter.git ~/flutter
-# add to PATH: export PATH="$HOME/flutter/bin:$PATH"
-
-# 2. Java 17 (current Android Gradle plugin needs it)
-sudo apt install -y openjdk-17-jdk
-
-# 3. Android SDK command-line tools (replaces Android Studio)
-mkdir -p ~/Android/cmdline-tools && cd ~/Android/cmdline-tools
-curl -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-unzip -q tools.zip && mv cmdline-tools latest && rm tools.zip
-
-# 4. SDK packages + licenses
-export ANDROID_HOME=~/Android
-export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-yes | sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "build-tools;28.0.3"
-
-# 5. Verify
-flutter doctor        # Android toolchain should show ✓
-flutter devices       # should list your connected phone
+xcodebuild -project native/apple/Tact/Tact.xcodeproj \
+  -scheme Tact \
+  -configuration Debug \
+  -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
 ```
 
-The `ANDROID_HOME`/`PATH` exports are added to `~/.bashrc` automatically during setup.
-
-#### Android build requirements
-
-Flutter 3.47 requires minimum Gradle 8.14.2, AGP 8.11.1, and Kotlin 2.2.20.
-Update these in `app/android/gradle/wrapper/gradle-wrapper.properties` and
-`app/android/settings.gradle.kts` if your clone predates that:
+#### macOS
 
 ```bash
-cd app && flutter build apk --debug   # verify the Android build compiles
+swift run --package-path native/apple/TactApple
 ```
 
-#### Previewing the phone UI on the laptop (Flutter web)
+Tact starts in the menu bar. Use its menu to open the dashboard or Settings.
 
-No phone or recompile-per-change needed — the same `lib/main.dart` runs as a web
-app in the laptop's browser with hot reload. Web support is already checked in
-(`app/web/`).
+#### Android
+
+Open `native/android` in Android Studio, or build from the command line:
 
 ```bash
-cd app
-flutter run -d chrome        # opens the app in Chrome; r = hot reload, R = hot restart
-flutter run -d web-server --web-port 8080   # headless; open http://localhost:8080 yourself
+cd native/android
+./gradlew :app:assembleDebug
 ```
 
-To emulate a phone viewport, open Chrome DevTools (**Ctrl+Shift+M**) and pick a
-device size. The app pairs against the local agent like any client: host
-`localhost`, port `8000`, OTP from the agent startup log, then approve at
-`http://localhost:8000/admin/pair/pending`. `flutter run -d web-server` also
-serves the LAN, so a phone browser can load it without an APK install.
+Install the generated APK on a device or run the app from Android Studio. For a
+local agent reached from the Android emulator, the default account service is
+`http://10.0.2.2:8000`; set `tactAccountServiceUrl` for physical devices and
+deployed environments.
 
-#### Stopping the agent and dev server
+#### Windows
 
-Kill by PID to be safe — `pkill -f 'tact.agent'` / `pkill -f flutter` patterns
-can match the terminal running the command itself.
+Install Visual Studio with the .NET desktop and Windows App SDK workloads, then:
+
+```powershell
+dotnet build native/windows/TactWindows/TactWindows.csproj
+```
+
+Launch the packaged application. It starts in the Windows notification area;
+left-click opens the dashboard and the context menu exposes Preferences and
+Quit.
+
+#### Linux
+
+Install Rust, GTK4, libadwaita, and development headers. On Debian/Ubuntu:
 
 ```bash
-kill $(pgrep -f 'python3 -m tact.agent')     # stop the agent
-kill $(pgrep -f 'flutter_tools.snapshot run') # stop the Flutter dev server
+sudo apt install build-essential libgtk-4-dev libadwaita-1-dev
+cargo build --release --manifest-path native/linux/Cargo.toml
 ```
 
-The agent prints a fresh OTP on every (re)start, so re-pair after restarting it.
+The app publishes a StatusNotifierItem. GNOME users need an
+AppIndicator/StatusNotifier shell extension.
 
-### 3. Host companion (desktop tray app)
+## Authentication and connection
+
+### Account sign-in
+
+1. Choose email/password, Apple, or Google in a supported native client.
+2. The agent verifies the credentials or provider identity and issues a
+   revocable 30-day session.
+3. The client registers its stable device identity and loads every device for
+   that account.
+4. Active computers display their platform, model, and connection state.
+5. Selecting a connectable computer grants a device-specific WebSocket token
+   and opens the control surface.
+
+Passwords are stored as salted `scrypt` hashes. Session tokens are stored only
+as SHA-256 digests. Provider identity tokens are checked against issuer,
+audience, expiry, and provider signing keys.
+
+### Direct IP + one-time code
+
+1. Start the agent and copy the six-digit code from its startup output.
+2. Enter the computer address and code in the native client.
+3. Approve the pending request at:
+
+   ```text
+   http://<computer-address>:8000/admin/pair/pending
+   ```
+
+4. The client stores its device token securely and reconnects without another
+   code until the device is revoked.
+
+Codes expire after five minutes, are single use, and still require explicit
+host approval.
+
+## Optional desktop integrations
+
+The agent degrades gracefully when an optional integration is unavailable.
+Common Linux packages are:
 
 ```bash
-cd app
-flutter run -d linux   # or -d macos / -d windows
-flutter run -t lib/main_tray.dart
+sudo apt install git playerctl xdotool wmctrl xclip x11-utils pulseaudio-utils
 ```
 
-The tray menu shows the host IP, port, current OTP, and paired-device count, and auto-opens the approval window when a new device requests pairing.
+- `git` enables repository state and actions.
+- `playerctl` enables MPRIS media status and transport.
+- `xdotool` provides media-key fallback and focused-app shortcuts on X11.
+- `wmctrl` enables app discovery, focus, window controls, and layouts.
+- `xclip`, `xsel`, or `wl-clipboard` enables the text clipboard bridge.
+- `xprop` provides focused-window context on X11.
+- `pactl` provides volume and audio-device controls.
+- Docker CLI access enables container state and lifecycle actions.
 
-### 4. Web client (fallback)
+## Protocol
 
-The agent serves a single-file web client:
+Authenticated clients connect to `/ws` and exchange three message classes:
 
-```
-http://<laptop-ip>:8000/client/index.html
-```
+| Channel | Direction | Purpose |
+| --- | --- | --- |
+| State | Agent → client | Initial snapshot and live telemetry |
+| Events | Agent → client | Context, Git, Docker, and other state changes |
+| Actions | Client → agent | Allowlisted request and structured result |
 
-## Secure pairing flow
+Slow system commands run outside the event loop. State-changing actions trigger
+an immediate refreshed snapshot.
 
-1. Start the desktop agent. It prints a 6-digit OTP to the terminal, e.g.:
+The browser fallback remains available at:
 
-```
-INFO:tact.startup:Tact Desktop Agent started
-INFO:tact.startup:Client URL: http://0.0.0.0:8000/client/index.html
-INFO:tact.startup:Pairing OTP (valid 5 min): 832544
-INFO:tact.startup:To pair a device: open the client URL, enter the OTP, then approve here: http://0.0.0.0:8000/admin/pair/pending
-```
-
-2. On your phone, open the Flutter app, enter the laptop's IP and the 6-digit OTP, and tap **Connect** (or open `http://<laptop-ip>:8000/client/index.html` for the web client).
-
-3. On your laptop, approve the request:
-   - **Host companion**: the window pops up automatically — tap **Approve**, or open the tray menu → *Review approvals…*
-   - **Terminal/Web**: open `http://<laptop-ip>:8000/admin/pair/pending` and click **Approve**
-
-4. After approval, the phone connects to the WebSocket and can execute safe actions. The device token is persisted on the phone, so future connections skip the OTP step.
-
-**Security notes:**
-- The OTP is only shown in the server terminal, not exposed via HTTP endpoints
-- Pairing requires explicit approval from the laptop
-- OTPs expire after 5 minutes
-- Paired devices are stored locally in `~/.tact/config.json`
-- The WebSocket requires an auth handshake (`device_id` or OTP) before any message is accepted
-
-## How the agent talks to the phone
-
-The WebSocket protocol (`/ws`) is three channels:
-
-| Channel | Direction | Contents |
-| ------- | --------- | -------- |
-| State | agent → phone | Full state snapshot on connect (`init`) and every 5s (`telemetry`); a fresh snapshot is pushed immediately after any state-changing action |
-| Events | agent → phone | One-way push of `git.state_changed`, `vscode.state_changed`, `docker.state_changed`, `context.changed` events (with severity + optional actions) |
-| Actions | phone → agent | `action` request → `action_result` response; every action id is looked up in the allowlisted registry |
-
-Slow subprocess work (git, docker, playerctl) runs in a thread pool so the event loop never blocks.
-
-## Context Engine
-
-The agent knows what you are doing right now, and the phone shows it in a banner and can switch surfaces on change.
-
-```
-active_app = focused window class       (xprop _NET_ACTIVE_WINDOW + WM_CLASS, X11)
-project    = parse(window title) ?? current workspace
-branch     = git(project).branch
-workflow   = WORKFLOW_MAP[active_app]   (development / meeting / media / …)
-```
-
-- `context.status` — current detection result (`active_app`, `window_title`, `project`, `branch`, `workflow`, `override`)
-- `context.override` / `context.clear_override` — pin or clear a manual override (the pinned context survives until explicitly cleared)
-- `context.changed` — broadcast when the active app or project changes, so the client reacts without polling
-
-Project resolution falls back from window titles to VS Code workspace storage to the configured workspace (`system.set_workspace`), so a context is almost always resolvable. The Flutter client renders this as the `ContextBanner` (app · project · branch · workflow chip) above the tab content.
-
-## Available actions
-
-All actions are allowlisted in the agent and dispatched by `ActionRegistry`:
-
-**system**
-- `system.open_url`, `system.set_workspace` (composite: propagates to all integrations)
-- `system.open_terminal`, `system.open_project`
-- `system.volume` (get/set 0–100), `system.volume_up`, `system.volume_down`, `system.mute`
-- `system.lock_screen`, `system.screenshot`, `system.battery`
-- `system.apps` (registry + running state), `system.open_app` (launch + focus), `system.focus_app`
-- `system.brightness` (get/set, xrandr overlay), `system.sinks` (audio outputs), `system.set_sink` (switch default sink)
-- `system.sources` (microphones, `.monitor` loopbacks filtered), `system.set_source` (switch default mic)
-
-**vscode**
-- `vscode.open_workspace`, `vscode.status`, `vscode.workspaces`
-- `vscode.run_task` (run a task; no label → VS Code task picker), `vscode.debug`, `vscode.test`
-- `vscode.open_file` (`--goto path:line`)
-
-**git**
-- `git.status` (branch, clean/dirty, ahead/behind, changed files)
-- `git.branches`, `git.switch_branch`, `git.tree`, `git.log` (commit graph)
-- `git.add` (`git add -A`), `git.commit`, `git.pull`, `git.push`
-
-**media**
-- `media.status` (player list, now playing, position/length, volume)
-- `media.play_pause`, `media.next`, `media.previous` (optionally target a specific `player`)
-- `media.volume` (0–1), `media.seek` (seconds)
-- `media.open_spotify` (composite: launches the desktop app and focuses its window, web fallback)
-
-**docker**
-- `docker.status` (container list: name, state, image, uptime)
-- `docker.start`, `docker.stop`, `docker.restart`, `docker.logs` (optional `tail`)
-
-**clipboard**
-- `clipboard.get`, `clipboard.set`, `clipboard.status`, `clipboard.clear_history`
-
-**context**
-- `context.status`, `context.override`, `context.clear_override`
-- `context.surfaces` (list registered surfaces), `context.surface` (current surface)
-
-**chrome** (xdotool keys to the focused window — safe because the Context Engine guarantees Chrome is active)
-- `chrome.back`, `chrome.forward`, `chrome.refresh`, `chrome.new_tab`, `chrome.close_tab`
-- `chrome.reopen_tab`, `chrome.copy_url` (select + copy), `chrome.devtools`
-
-**teams**
-- `teams.mute` (Ctrl+Shift+M), `teams.camera` (Ctrl+Shift+O), `teams.share` (Ctrl+Shift+E), `teams.leave` (Ctrl+Shift+B) — wmctrl-focus + xdotool
-
-**window**
-- `window.list` (running windows from `wmctrl -lx`), `window.focus`, `window.move` (desktop + geometry)
-- `window.minimize`, `window.maximize`, `window.close`
-- `window.layouts` (Coding / Meeting / Media presets), `window.apply_layout`
-
-**project**
-- `project.open` (composite: VS Code + terminal + file manager at the path)
-- `project.resources` (per-project buttons incl. the resolved git remote URL)
-
-**terminal**
-- `terminal.clear` (ctrl+l), `terminal.rerun` (Up + Return), `terminal.kill` (ctrl+c) — xdotool keys to the focused terminal, safe because the Context Engine only shows this surface when a terminal is active
-
-The current registry is also published in every state snapshot
-under `actions`, so clients can render dynamic action grids.
-
-## Context surfaces
-
-The phone's first tab renders the **active surface** from
-`snapshot.context.surface` — a header (app icon, title, workflow chip, pin
-toggle), the surface's own action grid (VS Code: Run Task/Debug/Test/Open
-File + git; Chrome/Edge/Firefox: back/forward/refresh/tabs/copy URL; Teams:
-mute/camera/share/leave; Spotify: transport; Terminal: New/Clear/Rerun/Kill
-+ git), a live state card (git status, now-playing, terminal title +
-project + branch), a **project card** (one-tap `project.open` environment +
-workspace/terminal/browser/folder/repo resources), and a compact workspace
-glance row (docker, battery, branch, staleness). Unknown apps and unavailable
-detection fall back to the "Desktop" surface so the tab is never empty.
-Surfaces live in `tact/agent/integrations/context/surfaces.py` and each
-button maps to an allowlisted registry action.
-
-**Gestures:** horizontal swipe on the Surface tab cycles surfaces (pins the
-choice via `context.override`, same as the pin button), swipe the
-now-playing card for previous/next, and swipe event cards away to mark them
-read.
-
-## App launcher & window controls
-
-The **Apps tab** lists known apps grouped into Development / Communication /
-Media (`system.apps`, running state from `wmctrl -lx`) with a green running
-dot — tap launches (`system.open_app`, with a focus-after-launch poll) or
-focuses a running instance (`system.focus_app`). A Recent row feeds from the
-Context Engine's app history (`context.recent_apps`). Below, the window
-section lists every open window with focus/minimize/maximize/close buttons
-(`window.*`, wmctrl) and **workspace layout presets** — Coding (VS Code +
-terminal + Chrome), Meeting (Teams + Chrome), Media (Spotify + Chrome) —
-applied with one tap via `window.apply_layout`.
-
-## Project workspace
-
-When the Context Engine resolves a project, the Surface tab shows a project
-card: **Open environment** runs the `project.open` composite (VS Code +
-terminal at the project path + file manager) and resource chips (Workspace,
-Terminal, Browser, Folder, and the GitHub repo URL resolved from the git
-remote) reuse existing actions.
-
-## Control Strip
-
-A compact persistent bar sits above the navigation bar on **every tab**:
-volume slider, play/pause, screenshot, and lock. Tapping the volume icon
-expands a bottom sheet with full sliders for volume and brightness
-(`system.brightness`, xrandr overlay), the **audio output switcher**
-(`system.sinks` / `system.set_sink` — switch between speakers, HDMI,
-Bluetooth with one tap), and the **microphone switcher** (`system.sources` /
-`system.set_source`).
-
-## Media controls
-
-The Media tab uses **playerctl** (MPRIS) to control Spotify, browser media
-sessions (Chrome/Chromium/Firefox), VLC, and other players from one place.
-
-```bash
-sudo apt install playerctl
-```
-
-`playerctl` exposes every running MPRIS player; no per-app APIs are needed.
-The agent reports `media.status` in its state snapshot, and the transport
-actions optionally accept a `player` payload to target a specific app. The
-Media tab has a volume slider (follows live telemetry unless you're dragging)
-and a seek slider with timestamps.
-
-> **Not seeing the Media tab's controls?** The agent likely doesn't have
-> `playerctl` on its PATH. Install it (see System dependencies above), restart
-> the agent, and tap **Check Again** in the app.
-
-**MPRIS fallback:** some players register MPRIS unreliably (snap Spotify drops
-its D-Bus registration intermittently). When `playerctl` fails, the transport
-actions fall back to X11 media keys via `xdotool` (`XF86AudioPlay`/`Next`/`Prev`),
-which keep working regardless of MPRIS state. The action result reports which
-transport was used (`method: "playerctl" | "xdotool"`).
-
-**Launching Spotify:** `media.open_spotify` launches the app, then runs a
-detached focus script that polls `wmctrl -a Spotify` (snap apps take several
-seconds to create a window), returning immediately to the phone.
-
-## VS Code workspace detection
-
-`vscode.workspaces` reads VS Code's own state instead of scraping process
-command lines (which are polluted by extension/language-server helper
-processes). It parses each `~/.config/Code/User/workspaceStorage/<hash>/workspace.json`
-(`folder` field, `file://` decoded), filters out VS Code install/extension
-and cache directories, and sorts by storage-directory mtime so the currently
-open workspace is listed first. Process cmdline scanning is kept only as a
-fallback when the storage directory is unavailable.
-
-## Docker integration
-
-`docker.status` lists containers via `docker ps -a` (name, state, image,
-uptime); `start`/`stop`/`restart`/`logs` operate on a named container.
-Container state changes are pushed as `docker.state_changed` events by the
-state monitor. When the daemon is down or the agent runs without docker group
-permissions, the integration reports the failure (`docker_permission_denied`,
-`docker_failed`) instead of crashing — the phone renders the degraded state.
-
-## Clipboard
-
-`clipboard.get` reads the desktop clipboard (xclip/xsel/wl-paste), `clipboard.set`
-writes phone text to it. The agent keeps a rolling, deduplicated history (last
-20 entries) and reports `image_supported` by probing X11 TARGETS (requires
-xclip) — image transfer is not implemented yet (text only).
-
-## Project structure
-
-```
-tact/                        # Python desktop agent
-├── agent/
-│   ├── __main__.py          # uvicorn entrypoint
-│   ├── main.py              # FastAPI app, HTTP + WebSocket endpoints, snapshot composition
-│   ├── actions.py           # ActionRegistry: explicit registration + composites
-│   ├── config.py            # pairing/OTP state, ~/.tact/config.json
-│   ├── events.py            # Event + EventBus (severity, actions)
-│   ├── monitoring.py        # generic StateMonitor: polls integrations' monitor()
-│   ├── ws_manager.py
-│   └── integrations/        # folder-per-capability pattern (see its README)
-│       ├── base.py          # Integration contract: actions() / snapshot() / monitor()
-│       ├── system/          # OS actions: volume, lock, screenshot, battery, open_*, apps, brightness, sinks
-│       ├── vscode/          # workspace detection + run/debug/test/open_file
-│       ├── git/             # status/branches/tree/log + commit ops (state.py: parsing)
-│       ├── media/           # MPRIS transport + xdotool fallback, open_spotify
-│       ├── docker/          # container status + lifecycle + logs
-│       ├── clipboard/       # get/set/history
-│       ├── chrome/          # browser nav via xdotool keys (focused window)
-│       ├── teams/           # meeting controls (wmctrl-focus + xdotool combos)
-│       ├── window/          # wmctrl window controls + layout presets
-│       ├── project/         # composite project-environment launcher + resources
-│       └── context/         # Context Engine (apps.py: APP_MAP, detection.py: X11 probe)
-app/                         # Flutter client
-├── lib/
-│   ├── main.dart            # phone client entrypoint
-│   ├── main_tray.dart       # host companion (desktop tray) entrypoint
-│   ├── protocol/message.dart
-│   ├── services/            # tact_client (WS), pairing, discovery (mDNS)
-│   ├── state/               # Riverpod providers (connection, telemetry)
-│   ├── features/            # dashboard (Surface/Apps/System/Developer/Media/Events),
-│   │                        # surface (context surface + project card + glance row),
-│   │                        # apps (launcher + window controls), strip (control strip),
-│   │                        # actions, developer, media, docker, clipboard, events, git, vscode
-│   ├── host/                # tray controller, status service, settings
-│   └── billing/             # entitlements (all unlocked for now)
-├── android/ ios/ linux/ macos/ windows/
-client/
-└── index.html               # single-file web client fallback
-tests/                       # agent tests
-├── test_domain.py
-└── test_integrations.py     # 83 tests, pytest
-docs/
-└── PHASE_TRACKER.md         # roadmap + status per phase
+```text
+http://<computer-address>:8000/client/index.html
 ```
 
 ## Tests
 
+Run the complete backend and integration suite:
+
 ```bash
-python3 -m pytest tests/ -q        # agent unit tests (75 passing)
-cd app && flutter test             # Flutter widget smoke test
+python3 -m unittest discover -s tests -v
 ```
 
+Useful native verification commands:
 
-## Roadmap
+```bash
+swift build --package-path native/core/TactCore
+swift build --package-path native/apple/TactApple
+swift build --package-path native/apple/TactHost
 
-The full roadmap lives in `docs/PHASE_TRACKER.md` (phases 0–14, per-item
-status, priorities). In brief: the Context Engine (phase 2) and the full
-Phase 3 surface set (VS Code Run/Debug/Test, Chrome nav, Teams meeting
-controls, Terminal Clear/Rerun/Kill, app launcher, window/workspace layout
-presets, project workspace) are live, along with the Phase 4 persistent
-Control Strip (volume, brightness, audio output + microphone switching) and
-the contextual gestures (swipe surfaces / media / dismiss events). Next are
-build/test state cards, then actionable events (phase 6) and workflows &
-macros (phase 8). Every phase builds on the same integration pattern: one
-folder + one registry line per capability.
+cd native/android
+./gradlew :app:compileDebugKotlin
+```
+
+Run the Windows and Linux builds on their target operating systems for final
+packaging and tray-integration validation.
+
+## Documentation
+
+- [`docs/NATIVE_APPS.md`](docs/NATIVE_APPS.md) — platform architecture,
+  provider configuration, lifecycle, and build details.
+- [`docs/GITHUB_ROADMAP_AUDIT.md`](docs/GITHUB_ROADMAP_AUDIT.md) — current issue
+  and milestone implementation audit.
+- [`docs/PHASE_TRACKER.md`](docs/PHASE_TRACKER.md) — detailed product roadmap.
+
+## Security
+
+- Every remote action is explicitly registered and allowlisted.
+- WebSocket clients must authenticate before receiving state or executing an
+  action.
+- Direct pairing requires a short-lived code and host approval.
+- Provider secrets stay in deployment configuration.
+- Account sessions can be revoked independently.
+- Device records are scoped to their owning account.
