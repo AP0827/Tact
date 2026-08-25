@@ -2,6 +2,7 @@ import asyncio
 import logging
 import secrets
 import shutil
+import socket
 import time
 import urllib.parse
 from pathlib import Path
@@ -196,17 +197,61 @@ async def pair_reset(payload: dict):
     if not device_id:
         raise HTTPException(status_code=400, detail="device_id required")
     config.unpair_device(device_id)
+    terminated = await manager.terminate_device(device_id)
     pendings = config._data.get("pending_pairings", [])
     config._data["pending_pairings"] = [p for p in pendings if p.get("device_id") != device_id]
     config._save()
-    return {"ok": True}
+    return {"ok": True, "terminated_connections": terminated}
 
 @app.post("/api/pair/reset_all")
 async def pair_reset_all():
+    device_ids = [device.device_id for device in config.list_devices()]
     config._data["paired_devices"] = []
     config._data["pending_pairings"] = []
     config._save()
-    return {"ok": True}
+    terminated = 0
+    for device_id in device_ids:
+        terminated += await manager.terminate_device(device_id)
+    return {"ok": True, "terminated_connections": terminated}
+
+
+def _host_address() -> str:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("8.8.8.8", 80))
+            return str(probe.getsockname()[0])
+    except OSError:
+        return "127.0.0.1"
+
+
+@app.get("/api/host/status")
+async def host_status():
+    active = manager.active_device_ids()
+    return {
+        "host": _host_address(),
+        "port": 8000,
+        "pairing_token": config._data.get("pairing_token"),
+        "pairing_token_expires": config._data.get("pairing_token_expires"),
+        "pending_pairings": [
+            {
+                "pending_id": item.get("pending_id"),
+                "device_id": item.get("device_id"),
+                "label": item.get("label"),
+                "created_at": item.get("created_at"),
+            }
+            for item in config._data.get("pending_pairings", [])
+        ],
+        "paired_devices": [
+            {
+                "device_id": device.device_id,
+                "label": device.label,
+                "paired_at": device.paired_at,
+                "last_seen": device.last_seen,
+                "active": device.device_id in active,
+            }
+            for device in config.list_devices()
+        ],
+    }
 
 
 def _account_session(authorization: Optional[str]) -> AuthSession:
@@ -573,6 +618,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": "unauthorized"})
             await websocket.close(code=4003)
             return
+        manager.register(websocket, device_id=device_id, label=device_label)
         telemetry_task = None
         try:
             await websocket.send_json({"type": "init", "payload": snapshot_state()})
