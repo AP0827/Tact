@@ -16,6 +16,16 @@ android {
         targetSdk = 36
         versionCode = 2
         versionName = "2.0"
+        buildConfigField(
+            "String",
+            "TACT_ACCOUNT_SERVICE_URL",
+            "\"${project.findProperty("tactAccountServiceUrl") ?: "http://10.0.2.2:8000"}\"",
+        )
+        buildConfigField(
+            "String",
+            "TACT_GOOGLE_CLIENT_ID",
+            "\"${project.findProperty("tactGoogleClientId") ?: ""}\"",
+        )
     }
 
     buildFeatures {
@@ -45,4 +55,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.3")
     implementation("com.squareup.okhttp3:okhttp:5.1.0")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 }
