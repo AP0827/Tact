@@ -31,7 +31,7 @@ class GitIntegrationTests(unittest.TestCase):
             integration = GitIntegration()
             discovered = integration.discover_root(nested)
 
-            self.assertEqual(discovered, root)
+            self.assertEqual(discovered, root.resolve())
 
     @patch("tact.agent.integrations.git.integration.subprocess.run")
     @patch("tact.agent.integrations.git.integration.shutil_which", return_value="git")
@@ -383,7 +383,10 @@ class ClipboardIntegrationTests(unittest.TestCase):
         self.assertFalse(integration.get()["ok"])
         self.assertFalse(integration.set("x")["ok"])
 
-    def test_history_deduplicates_and_limits(self):
+    @patch("tact.agent.integrations.clipboard.integration.shutil.which", return_value="/usr/bin/xsel")
+    @patch("tact.agent.integrations.clipboard.integration.subprocess.run")
+    def test_history_deduplicates_and_limits(self, mock_run, mock_which):
+        mock_run.return_value.returncode = 0
         integration = ClipboardIntegration(history_size=3)
         for text in ["a", "b", "c", "a", "d"]:
             integration.set(text)
@@ -407,8 +410,9 @@ class ClipboardIntegrationTests(unittest.TestCase):
 
 class ContextIntegrationTests(unittest.TestCase):
     @patch("tact.agent.integrations.context.integration.os.environ", {"DISPLAY": ":0"})
+    @patch("tact.agent.integrations.context.detection.shutil.which", return_value="/usr/bin/xprop")
     @patch("tact.agent.integrations.context.detection.subprocess.run")
-    def test_detect_maps_active_window_to_app(self, mock_run):
+    def test_detect_maps_active_window_to_app(self, mock_run, mock_which):
         class Result:
             def __init__(self, returncode=0, stdout="", stderr=""):
                 self.returncode = returncode
@@ -980,4 +984,3 @@ class ContextRecentAppsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
